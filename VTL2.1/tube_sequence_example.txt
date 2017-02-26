@@ -1,0 +1,47 @@
+#comment
+The speech signal is defined by a sequence of states of a glottis model
+and a tube model (vocal tract area function). Between the defined states,
+the model parameters are linearly interpolated.
+
+A state is specified by parameter values in six lines as follows:
+
+time_step_ms  (the time difference between this state and the previous state)
+glottal_rest_displacement_cm subglottal_pressure_Pa F0_Hz  (parameters defining the glottal state)
+incisor_position_cm nasal_port_area_cm2  (the nasal port junction is between the 16th and 17th section from the glottis)
+area0 area1 ... area39  (areas of the 40 tube sections between glottis and lips in cm2)
+length0 length1 ... length39  (lengths of the 40 tube sections between glottis and lips in cm)
+artic0 artic1 ... artic39  (articulators of the 40 tube sections between glottis and lips: N=other;T=tongue;I=lower incisors;L=lower lip)
+
+#static_glottis_params (Static parameters of the triangular glottis model in MKS units)
+
+0.013000 0.002400 0.000600 0.000120 0.000030 0.100000 0.600000 80.000000 8.000000 240.000000 24.000000 25.000000 0.000500 0.000100 129.000000 125.510000 
+
+#states (Six lines per state with the format given above)
+
+0
+0.0100 0 120
+15.32 0.00
+0.65 0.53 0.43 0.35 0.32 1.43 3.15 2.04 0.66 0.43 0.67 0.68 0.76 0.94 1.47 2.32 2.29 2.35 2.38 2.40 2.51 2.62 2.66 3.05 3.59 3.98 4.20 4.39 4.27 3.90 3.73 3.52 3.50 3.10 2.69 2.31 2.33 2.35 2.26 2.19 
+0.45 0.45 0.45 0.45 0.45 0.45 0.45 0.45 0.45 0.45 0.45 0.45 0.45 0.45 0.45 0.45 0.54 0.52 0.50 0.48 0.46 0.44 0.42 0.40 0.39 0.37 0.36 0.35 0.34 0.33 0.32 0.31 0.30 0.29 0.29 0.28 0.28 0.28 0.28 0.27 
+N N N N N N N N N N T T T T T T T T T T T T T T T T T T T T T T T T T I I L L L
+
+20
+0.0100 1000 130
+15.32 0.00
+0.65 0.53 0.43 0.35 0.32 1.43 3.15 2.04 0.66 0.43 0.67 0.68 0.76 0.94 1.47 2.32 2.29 2.35 2.38 2.40 2.51 2.62 2.66 3.05 3.59 3.98 4.20 4.39 4.27 3.90 3.73 3.52 3.50 3.10 2.69 2.31 2.33 2.35 2.26 2.19 
+0.45 0.45 0.45 0.45 0.45 0.45 0.45 0.45 0.45 0.45 0.45 0.45 0.45 0.45 0.45 0.45 0.54 0.52 0.50 0.48 0.46 0.44 0.42 0.40 0.39 0.37 0.36 0.35 0.34 0.33 0.32 0.31 0.30 0.29 0.29 0.28 0.28 0.28 0.28 0.27 
+N N N N N N N N N N T T T T T T T T T T T T T T T T T T T T T T T T T I I L L L
+
+400
+0.0100 1000 120
+15.18 0.00
+0.66 0.54 0.44 0.36 0.33 1.37 3.75 4.00 3.72 3.28 3.24 3.49 4.41 4.85 5.14 5.34 4.08 3.68 2.94 2.30 1.68 1.08 0.81 0.71 0.69 0.69 0.71 0.77 0.78 0.64 0.55 0.55 0.61 0.71 0.94 1.04 1.21 1.59 1.63 1.58 
+0.44 0.44 0.44 0.44 0.44 0.44 0.44 0.44 0.44 0.44 0.44 0.44 0.44 0.44 0.44 0.44 0.53 0.51 0.49 0.47 0.45 0.43 0.41 0.40 0.38 0.37 0.36 0.34 0.33 0.32 0.31 0.30 0.30 0.29 0.28 0.28 0.28 0.27 0.27 0.27 
+N N N N N N N N N N N N T T T T T T T T T T T T T T T T T T T T T T T T T I L L
+
+20
+0.0100 0 120
+15.18 0.00
+0.66 0.54 0.44 0.36 0.33 1.37 3.75 4.00 3.72 3.28 3.24 3.49 4.41 4.85 5.14 5.34 4.08 3.68 2.94 2.30 1.68 1.08 0.81 0.71 0.69 0.69 0.71 0.77 0.78 0.64 0.55 0.55 0.61 0.71 0.94 1.04 1.21 1.59 1.63 1.58 
+0.44 0.44 0.44 0.44 0.44 0.44 0.44 0.44 0.44 0.44 0.44 0.44 0.44 0.44 0.44 0.44 0.53 0.51 0.49 0.47 0.45 0.43 0.41 0.40 0.38 0.37 0.36 0.34 0.33 0.32 0.31 0.30 0.30 0.29 0.28 0.28 0.28 0.27 0.27 0.27 
+N N N N N N N N N N N N T T T T T T T T T T T T T T T T T T T T T T T T T I L L
