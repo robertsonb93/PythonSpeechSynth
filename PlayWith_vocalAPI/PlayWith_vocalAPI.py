@@ -66,14 +66,27 @@ s = str.encode('utf-8')
 speaker = ctypes.c_char_p(s)
 
 audio = wave_to_double("..\\..\\VTL2.1\\Example5-Hallo-synth.wav");
-audioPtr = ctypes.POINTER(ctypes.c_double)()
-audioPtr.contents = ctypes.c_double(audio[0]);
+
+#Audio is a list, convert it to an array of doubles 
+audioPtr = (ctypes.c_double * len(audio))(*audio)
 
 
-ApiTest1(speaker, audioPtr, len(audio))
+#ApiTest1(speaker, audioPtr, len(audio))#currently throwing an unhandled OS exception
 
 
 print(Initialize(speaker)) # 0 means success, >0 means error
+print(Close());
+print("Get Constants")
+audioSamplingRate_Int = ctypes.POINTER(ctypes.c_int(1))#So Frustrating... this is not a  ctypes type......
+numTubeSections_Int =  ctypes.POINTER(ctypes.c_int(1))
+numVocalTractParams = ctypes.POINTER(ctypes.c_int(1))
+numGlottisParams =  ctypes.POINTER(ctypes.c_int(1))
+GetConstants(audioSamplingRate_Int,numTubeSections_Int,numVocalTractParams,numGlottisParams);
+print(audioSamplingRate_Int)
+print(numTubeSections_Int)
+print(numVocalTractParams)
+print(numGlottisParams);
 
 #I think the way to work with this API for ML purposes is going to be by loading a speaker, then modifiying it using TubesynthesisAdD, if 
-#i understand it correctly(though I probably dont)
+#i understand it correctly(though I probably dont). 
+#Perhaps we start with vtlSynthBlock and create the "model" to be synthesized, theen use the tubesenthesis mentioned above
