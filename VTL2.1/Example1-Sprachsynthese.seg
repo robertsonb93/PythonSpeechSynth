@@ -1,0 +1,13 @@
+name = ; duration_s = 0.050000; 
+name = S; duration_s = 0.112088; start_of_syllable = 1; start_of_word = 1; word_orthographic = Sprachsynthese; 
+name = p; duration_s = 0.116977; 
+name = R; duration_s = 0.052970; 
+name = a:; duration_s = 0.201561; 
+name = x; duration_s = 0.045891; 
+name = z; duration_s = 0.122376; start_of_syllable = 1; 
+name = I; duration_s = 0.037793; 
+name = n; duration_s = 0.076485; 
+name = t; duration_s = 0.133174; start_of_syllable = 1; 
+name = e:; duration_s = 0.197062; 
+name = z; duration_s = 0.094482; start_of_syllable = 1; 
+name = schwa; duration_s = 0.113378; 
