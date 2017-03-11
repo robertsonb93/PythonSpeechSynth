@@ -86,7 +86,7 @@ audioPtr = (double * len(audio))(*audio)
 
 
 print(Initialize(speaker)) # 0 means success, >0 means error
-print(Close());
+#print(Close());
 
 print("Get Version")
 
@@ -103,23 +103,17 @@ print(version.value)
 #// o The number of vocal tract model parameters.
 #// o The number of glottis model parameters.
 #// ****************************************************************************
-#audioSamplingRate_Int =c_int(1)
-#numTubeSections_Int =  c_int(1)
-#numVocalTractParams = c_int(1)
-#numGlottisParams =  ctypes.c_long(1) #I have tried as being a single integer, with it going as a long, int, int32, 
-##numGlottisParams = (c_int * 64)(99)#After trying the single values, tried handing it some arrays as both double and integer sizes 1,16,32,64
+audioSamplingRate_Int =c_int(1)
+numTubeSections_Int =  c_int(1)
+numVocalTractParams = c_int(1)
+numGlottisParams =  ctypes.c_long(1) #I have tried as being a single integer, with it going as a long, int, int32, 
+#numGlottisParams = (c_int * 64)(99)#After trying the single values, tried handing it some arrays as both double and integer sizes 1,16,32,64
 
-#GetConstants(ctypes.byref(audioSamplingRate_Int), 
-#             ctypes.byref(numTubeSections_Int),
-#           ctypes.byref(numVocalTractParams),
-#             ctypes.byref(numGlottisParams),#I have tried re-ordering the params to ensure there isnt a type difference, but to no avail.
-#             ) #Well it was working, till I decided to hit reset.... then it changed its mind.. Intermittent SegFaults
-
-##print("Get Constants Post")#IF I keep mashing the reset/rerun button, sometimes i get to see these values except for numGlottisParams
-##print(audioSamplingRate_Int.value)
-##print(numTubeSections_Int.value)
-##print(numVocalTractParams.value)
-##print(numGlottisParams.value)#when these do pass through, they all have the correct values except for numGlottisParams(returns 0, not 6)
+GetConstants(ctypes.byref(audioSamplingRate_Int), 
+             ctypes.byref(numTubeSections_Int),
+           ctypes.byref(numVocalTractParams),
+             ctypes.byref(numGlottisParams),#I have tried re-ordering the params to ensure there isnt a type difference, but to no avail.
+             ) #Well it was working, till I decided to hit reset.... then it changed its mind.. Intermittent SegFaults
 
 
 #// ****************************************************************************
