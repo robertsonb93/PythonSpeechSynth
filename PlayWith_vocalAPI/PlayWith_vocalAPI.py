@@ -5,7 +5,7 @@ c_int = ctypes.c_int32
 w_char = ctypes.c_wchar_p
 ptr = ctypes.POINTER
 double = ctypes.c_double
-
+ref = ctypes.byref
 
 MyDllObject = ctypes.cdll.LoadLibrary("../../VocalTractLabApi64")
 #it's important to assign the function to an object
@@ -67,6 +67,12 @@ def wave_to_double(filename):
     w = [float(n) for n in w.readframes(w.getnframes())]
     return w
 
+
+
+
+
+
+
 #That's it now you can test it
 str ="..\\..\\VTL2.1\\test1.speaker"
 s = str.encode('utf-8')
@@ -85,38 +91,60 @@ print(Close());
 print("Get Version")
 
 version = ctypes.create_string_buffer(64)
-GetVersion(ctypes.byref(version)) #Doing this causes the getConstants() to stop segfaulting. This Python-C API deal is infuriating
+GetVersion(ctypes.byref(version)) #After adding this, the GetConstants below sometimes doesnt segfault
 print(version.value)
 
-print("Get Constants Pre")
-audioSamplingRate_Int =c_int(1)
-numTubeSections_Int =  c_int(1)
-numVocalTractParams = c_int(1)
-numGlottisParams =  c_int(1) #I have tried as both, being a single integer, with it going as a long, int, int32, 
-numGlottisParams = (c_int * 64)(99)#After trying the single values, tried handing it some arrays as both double and integer sizes 1,16,32,64
-
-print(audioSamplingRate_Int.value)
-print(numTubeSections_Int.value)
-print(numVocalTractParams.value)
-print(numGlottisParams[0])
 
 
+#// ****************************************************************************
+#// Returns a couple of constants:
+#// o The audio sampling rate of the synthesized signal.
+#// o The number of supraglottal tube sections.
+#// o The number of vocal tract model parameters.
+#// o The number of glottis model parameters.
+#// ****************************************************************************
+#audioSamplingRate_Int =c_int(1)
+#numTubeSections_Int =  c_int(1)
+#numVocalTractParams = c_int(1)
+#numGlottisParams =  ctypes.c_long(1) #I have tried as being a single integer, with it going as a long, int, int32, 
+##numGlottisParams = (c_int * 64)(99)#After trying the single values, tried handing it some arrays as both double and integer sizes 1,16,32,64
 
-GetConstants(ctypes.byref(audioSamplingRate_Int), 
-             ctypes.byref(numTubeSections_Int),
-             ctypes.byref(numVocalTractParams),
-             ctypes.byref(numGlottisParams)); #Well it was working, till I decided to hit reset.... then it changed its mind..
+#GetConstants(ctypes.byref(audioSamplingRate_Int), 
+#             ctypes.byref(numTubeSections_Int),
+#           ctypes.byref(numVocalTractParams),
+#             ctypes.byref(numGlottisParams),#I have tried re-ordering the params to ensure there isnt a type difference, but to no avail.
+#             ) #Well it was working, till I decided to hit reset.... then it changed its mind.. Intermittent SegFaults
+
+##print("Get Constants Post")#IF I keep mashing the reset/rerun button, sometimes i get to see these values except for numGlottisParams
+##print(audioSamplingRate_Int.value)
+##print(numTubeSections_Int.value)
+##print(numVocalTractParams.value)
+##print(numGlottisParams.value)#when these do pass through, they all have the correct values except for numGlottisParams(returns 0, not 6)
 
 
-print("Get Constants Post")#IF I keep mashing the reset/rerun button, sometimes i get to see these values except for numGlottisParams
-print(audioSamplingRate_Int.value)
-print(numTubeSections_Int.value)
-print(numVocalTractParams.value)
-print(numGlottisParams[0])#when these do pass through, they all have the correct values except for numGlottisParams(returns zero, not 6)
+#// ****************************************************************************
+#// Returns for each vocal tract parameter the minimum value, the maximum value,
+#// and the neutral value. Each vector passed to this function must have at 
+#// least as many elements as the number of vocal tract model parameters.
+#// The "names" string receives the abbreviated names of the parameters separated
+#// by spaces. This string should have at least 10*numParams elements.
+#// ****************************************************************************
+
+#using the test Api, I know we havbe 24 tractParams
+
+aSize = 64
+names = (c_int *aSize)(0)
+paramMin = (double * aSize)(0)
+paramMax = (double * aSize)(0)
+paramNeutral = (double * aSize)(0)
+
+#int,dbl,dbl,dbl
+GetTractParamInfo(names,paramMin,paramMax,paramNeutral);#I read somewhere that these python are the same as ctypes, hence dont needed byref
+                                                            #doesnt mean they dont both segfault..
 
 
 
 
 #I think the way to work with this API for ML purposes is going to be by loading a speaker, then modifiying it using TubesynthesisAdd, if 
 #i understand it correctly(though I probably dont). 
-#Perhaps we start with vtlSynthBlock and create the "model" to be synthesized, theen use the tubesenthesis mentioned above
+#Perhaps we start with vtlSynthBlock and create the "model" to be synthesized, theen use the tubesynthesis mentioned above
