@@ -6,6 +6,8 @@ w_char = ctypes.c_wchar_p
 ptr = ctypes.POINTER
 double = ctypes.c_double
 ref = ctypes.byref
+c_char = ctypes.c_char
+c_charp = ctypes.c_char_p
 
 MyDllObject = ctypes.cdll.LoadLibrary("../../VocalTractLabApi64")
 #it's important to assign the function to an object
@@ -50,17 +52,17 @@ GesToWav.restype = c_int
 #MyFunctionObject.argtypes = [w_char]
 Initialize.argtype = [ctypes.c_char_p]
 Close.argtype = [];
-GetVersion.argtype = [w_char]
+GetVersion.argtype = [c_char]
 GetConstants.argtype = [ptr(c_int),ptr(c_int),ptr(c_int),ptr(c_int)]
-GetTractParamInfo.argtype = [w_char,ptr(double),ptr(double),ptr(double)]
-GetGlottisParamInfo.argtype = [w_char,ptr(double)]
-GetTractParams.argtype = [w_char,ptr(double)]
+GetTractParamInfo.argtype = [c_charp,ptr(double),ptr(double),ptr(double)]
+GetGlottisParamInfo.argtype = [c_charp,ptr(double)]
+GetTractParams.argtype = [c_charp,ptr(double)]
 GetTransferFunction.argtype = [ptr(double),c_int,ptr(double),ptr(double)]
-SynthBlock.argtype = [ptr(double),ptr(double),ptr(double),w_char,c_int,double,ptr(double),ptr(c_int)]
-TubeSynthesisReset.argtype = [c_int, ptr(double),ptr(double),ptr(double),w_char,double,double,double,ptr(double)]
-ApiTest1.argtype = [w_char, ptr(double),ptr(c_int)]
-ApiTest2.argtype = [w_char, ptr(double),ptr(c_int)]
-GesToWav.argtype = [w_char, w_char,w_char,w_char]
+SynthBlock.argtype = [ptr(double),ptr(double),ptr(double),c_char,c_int,double,ptr(double),ptr(c_int)]
+TubeSynthesisReset.argtype = [c_int, ptr(double),ptr(double),ptr(double),c_char,double,double,double,ptr(double)]
+ApiTest1.argtype = [c_charp, ptr(double),ptr(c_int)]
+ApiTest2.argtype = [c_char, ptr(double),ptr(c_int)]
+GesToWav.argtype = [c_char,c_char,c_char,c_char]
 
 def wave_to_double(filename):
     w = wave.open(filename,'r')
@@ -76,7 +78,7 @@ def wave_to_double(filename):
 #That's it now you can test it
 str ="..\\..\\VTL2.1\\test1.speaker"
 s = str.encode('utf-8')
-speaker = ctypes.c_char_p(s)
+speaker = c_charp(s)
 
 audio = wave_to_double("..\\..\\VTL2.1\\Example5-Hallo-synth.wav");
 
@@ -86,15 +88,12 @@ audioPtr = (double * len(audio))(*audio)
 
 
 print(Initialize(speaker)) # 0 means success, >0 means error
-#print(Close());
+
 
 print("Get Version")
-
 version = ctypes.create_string_buffer(64)
 GetVersion(ctypes.byref(version)) #After adding this, the GetConstants below sometimes doesnt segfault
 print(version.value)
-
-
 
 #// ****************************************************************************
 #// Returns a couple of constants:
@@ -106,8 +105,7 @@ print(version.value)
 audioSamplingRate_Int =c_int(1)
 numTubeSections_Int =  c_int(1)
 numVocalTractParams = c_int(1)
-numGlottisParams =  ctypes.c_long(1) #I have tried as being a single integer, with it going as a long, int, int32, 
-#numGlottisParams = (c_int * 64)(99)#After trying the single values, tried handing it some arrays as both double and integer sizes 1,16,32,64
+numGlottisParams =  c_int(1) #I have tried as being a single integer, with it going as a long, int, int32, 
 
 GetConstants(ctypes.byref(audioSamplingRate_Int), 
              ctypes.byref(numTubeSections_Int),
@@ -126,18 +124,50 @@ GetConstants(ctypes.byref(audioSamplingRate_Int),
 
 #using the test Api, I know we havbe 24 tractParams
 
-aSize = 64
-names = (c_int *aSize)(0)
+aSize = numGlottisParams.value;
+names = (c_char *aSize)(0)
 paramMin = (double * aSize)(0)
 paramMax = (double * aSize)(0)
 paramNeutral = (double * aSize)(0)
 
-#int,dbl,dbl,dbl
-GetTractParamInfo(names,paramMin,paramMax,paramNeutral);#I read somewhere that these python are the same as ctypes, hence dont needed byref
-                                                            #doesnt mean they dont both segfault..
+GetTractParamInfo(names,paramMin,paramMax,paramNeutral);#and I cause the python to just crash... No errors even.
 
 
 
+#// ****************************************************************************
+#// Returns for each glottis model parameter the minimum value, the maximum value,
+#// and the neutral value. Each vector passed to this function must have at 
+#// least as many elements as the number of glottis model parameters.
+#// The "names" string receives the abbreviated names of the parameters separated
+#// by spaces. This string should have at least 10*numParams elements.
+#// ****************************************************************************
+
+
+aSize = numGlottisParams.value * 10;
+names = (c_char *aSize)(0)
+paramMin = (double * aSize)(0)
+paramMax = (double * aSize)(0)
+paramNeutral = (double * aSize)(0)
+
+GetGlottisParamInfo(names,paramMin,paramMax,paramNeutral)
+
+
+
+#// ****************************************************************************
+#// Returns the vocal tract parameters for the given shape as defined in the
+#// speaker file.
+#// The vector passed to this function must have at least as many elements as 
+#// the number of vocal tract model parameters.
+#// Returns 0 in the case of success, or 1 if the shape is not defined.
+#// ****************************************************************************
+
+size = numVocalTractParams.value*100;
+shapeName = (c_char * size)()
+param = (double * size)()
+
+ret = GetTractParamInfo(shapeName,param)#And we segfault!
+
+print(Close());
 
 #I think the way to work with this API for ML purposes is going to be by loading a speaker, then modifiying it using TubesynthesisAdd, if 
 #i understand it correctly(though I probably dont). 
