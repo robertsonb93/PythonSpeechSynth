@@ -34,15 +34,18 @@ GesToWav = MyDllObject.vtlGesToWav #Use this function to turn a gestural Score i
 #MyFunctionObject.restype = w_char
 Initialize.restype = c_int
 Close.restype = None
+
 GetVersion.restype = None
 GetConstants.restype = None
 GetTractParamInfo.restype = None
 GetGlottisParamInfo.restype = None
 GetTractParams.restype = c_int
 GetTransferFunction.restype = None
-SynthBlock.restype = None
+
+SynthBlock.restype = c_int
 TubeSynthesisReset.restype =  None
 TubeSynthesisAdd.restype = None
+
 ApiTest1.restype = None
 ApiTest2.restype = None
 GesToWav.restype = c_int
@@ -52,15 +55,17 @@ GesToWav.restype = c_int
 #MyFunctionObject.argtypes = [w_char]
 Initialize.argtype = [ctypes.c_char_p]
 Close.argtype = [];
+
 GetVersion.argtype = [c_char]
 GetConstants.argtype = [ptr(c_int),ptr(c_int),ptr(c_int),ptr(c_int)]
 GetTractParamInfo.argtype = [c_charp,ptr(double),ptr(double),ptr(double)]
 GetGlottisParamInfo.argtype = [c_charp,ptr(double)]
 GetTractParams.argtype = [c_charp,ptr(double)]
 GetTransferFunction.argtype = [ptr(double),c_int,ptr(double),ptr(double)]
+
 SynthBlock.argtype = [ptr(double),ptr(double),ptr(double),c_char,c_int,double,ptr(double),ptr(c_int)]
 TubeSynthesisReset.argtype = [c_int, ptr(double),ptr(double),ptr(double),c_char,double,double,double,ptr(double)]
-ApiTest1.argtype = [c_charp, ptr(double),ptr(c_int)]
+ApiTest1.argtype = [c_char, ptr(double),ptr(c_int)]
 ApiTest2.argtype = [c_char, ptr(double),ptr(c_int)]
 GesToWav.argtype = [c_char,c_char,c_char,c_char]
 
@@ -92,7 +97,7 @@ print(Initialize(speaker)) # 0 means success, >0 means error
 
 print("Get Version")
 version = ctypes.create_string_buffer(64)
-GetVersion(ctypes.byref(version)) #After adding this, the GetConstants below sometimes doesnt segfault
+GetVersion(ctypes.byref(version))
 print(version.value)
 
 #// ****************************************************************************
@@ -122,15 +127,13 @@ GetConstants(ctypes.byref(audioSamplingRate_Int),
 #// by spaces. This string should have at least 10*numParams elements.
 #// ****************************************************************************
 
-#using the test Api, I know we havbe 24 tractParams
-
-aSize = numGlottisParams.value;
+aSize = numGlottisParams.value *10; 
 names = (c_char *aSize)(0)
 paramMin = (double * aSize)(0)
 paramMax = (double * aSize)(0)
 paramNeutral = (double * aSize)(0)
 
-GetTractParamInfo(names,paramMin,paramMax,paramNeutral);#and I cause the python to just crash... No errors even.
+GetTractParamInfo(names,paramMin,paramMax,paramNeutral);#If you dont have the size large enough, python will just crash. no erros just die.
 
 
 
@@ -161,11 +164,11 @@ GetGlottisParamInfo(names,paramMin,paramMax,paramNeutral)
 #// Returns 0 in the case of success, or 1 if the shape is not defined.
 #// ****************************************************************************
 
-size = numVocalTractParams.value*100;
-shapeName = (c_char * size)()
+size = numVocalTractParams.value*25;
+shapeName = (ctypes.c_wchar * size)("a")
 param = (double * size)()
 
-ret = GetTractParamInfo(shapeName,param)#And we segfault!
+ret = GetTractParamInfo(shapeName,param)#And we segfault! I believe the issue is with shapeName, the speaker file has fields labelled shapeName and they refer to "a","e","i" ...
 
 print(Close());
 
