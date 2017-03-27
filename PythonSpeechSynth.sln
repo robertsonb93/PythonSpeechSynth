@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
 VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{888888A0-9F3D-457C-B088-3A5042F75D52}") = "PlayWith_vocalAPI", "PlayWith_vocalAPI\PlayWith_vocalAPI.pyproj", "{814EA0AA-EAFE-48E4-86B6-1B35E848A377}"
+Project("{888888A0-9F3D-457C-B088-3A5042F75D52}") = "Source", "PlayWith_vocalAPI\Source.pyproj", "{814EA0AA-EAFE-48E4-86B6-1B35E848A377}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{10121A0C-996D-4349-9D4C-5B708EAC9B47}"
 	ProjectSection(SolutionItems) = preProject

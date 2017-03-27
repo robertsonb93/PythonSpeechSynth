@@ -4,13 +4,14 @@
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>814ea0aa-eafe-48e4-86b6-1b35e848a377</ProjectGuid>
-    <ProjectHome>.</ProjectHome>
-    <StartupFile>PlayWith_vocalAPI.py</StartupFile>
+    <ProjectHome>
+    </ProjectHome>
+    <StartupFile>Main.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
     <OutputPath>.</OutputPath>
-    <Name>PlayWith_vocalAPI</Name>
+    <Name>Source</Name>
     <RootNamespace>PlayWith_vocalAPI</RootNamespace>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
@@ -22,7 +23,8 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="PlayWith_vocalAPI.py" />
+    <Compile Include="Main.py" />
+    <Compile Include="vtlPythonAPI.py" />
   </ItemGroup>
   <PropertyGroup>
     <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">10.0</VisualStudioVersion>
