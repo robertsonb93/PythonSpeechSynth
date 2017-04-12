@@ -1,4 +1,6 @@
 import ctypes
+import re
+import struct
 
 import wave #pip install wavefile
 c_int = ctypes.c_int32
@@ -67,12 +69,21 @@ def wav_to_list(filename):
     w.close()
     return aud
 
-def list_to_wave(filename,audio):
+def list_to_wave(filename,audio,byteRate,sampleRate):
+    depth = 2 ** (int(byteRate*8)-1)
+    depth = depth -1
     w = wave.open(filename,'w')
-    #nchannels, sampwidth, framerate, nframes, comptype, compname
-    w.setparams((1, 2, 44100, len(audio), 'NONE', 'noncompressed'))
-    audStr = (bytes(audio))
-    w.writeframes(audStr)
+    #nchannels, sampwidth(how bits per sample), framerate, nframes, comptype, compname
+    w.setparams((1, byteRate, sampleRate, len(audio), 'NONE', 'noncompressed'))
+    for a in audio:
+        if a < -1:
+            a = -1
+        else:
+            if a > 1:
+                a = 1
+
+        w.writeframesraw( struct.pack('<h', int((a*depth) )))
+
     w.close()
 
 def initSpeaker(SpeakerFile,debugMsg):
@@ -132,7 +143,7 @@ def getTractParams(numVocalTractParams):
     paramNeutral = (double * aSize)(0)
 
     GetTractParamInfo(tractNames,paramMin,paramMax,paramNeutral);#If you dont have the size large enough, python will just crash. no erros just die.
-    tNames = [tractNames[i] for i in range(tractNames._length_)]
+    tNames = [w for w in re.split('([\s.,;()]+)', tractNames.value.decode('utf-8')) if w is not str(' ')]
     pMin = [paramMin[i] for i in range(paramMin._length_)]
     pMax = [paramMax[i] for i in range(paramMax._length_)]
     pNeut = [paramNeutral[i] for i in range(paramNeutral._length_)]
@@ -150,14 +161,14 @@ def getTractParams(numVocalTractParams):
 #Will return a set of lists, consisting of the GlottisNames, the min,max,and neutral parameter values
 #// ****************************************************************************
 def getGlottisParams(numGlottisParams):
-    aSize = numGlottisParams* 10;
-    glottisNames = (c_char *aSize)(0)
+    aSize = numGlottisParams;
+    glottisNames = (c_char *(aSize*100))(0)
     paramMin = (double * aSize)(0)
     paramMax = (double * aSize)(0)
     paramNeutral = (double * aSize)(0)
 
     GetGlottisParamInfo(glottisNames,paramMin,paramMax,paramNeutral)   
-    gNames = [glottisNames[i] for i in range(glottisNames._length_)]
+    gNames = [w for w in re.split('([\s.,;()]+)', glottisNames.value.decode('utf-8')) if w is not str(' ')]
     pMin = [paramMin[i] for i in range(paramMin._length_)]
     pMax = [paramMax[i] for i in range(paramMax._length_)]
     pNeut = [paramNeutral[i] for i in range(paramNeutral._length_)]
@@ -170,17 +181,16 @@ def getGlottisParams(numGlottisParams):
 #// The vector passed to this function must have at least as many elements as 
 #// the number of vocal tract model parameters.
 #// Returns 0 in the case of success, or 1 if the shape is not defined.
-#Requires the number of Vocal Tract parameters from GetConstants(), a shapeName from getTractNames(), and
+#Requires the number of Vocal Tract parameters from GetConstants(), a shapeName from the speaker file, and
 # a boolean for printing messages on successfully grabbing the shapeName
 #Returns a list of the vocal tract parameters for a given shape
 #// ****************************************************************************
-
-#Notice VocalTractParameters and given shape, we need a shape name! lets try using names from the GetTractParamInfo
+#Notice VocalTractParameters and given shape, we need a shape name!n Check your uploaded speaker file!
 def getVocalTractParamsfromShape(numVocalTractParams,shapeName,debugMsg):
     size = numVocalTractParams;
-    sn = c_charp(shapeName)
+    sn = c_charp(shapeName.encode())
     vocalParams = (double * size)();
-    succes = GetTractParams(shapeName,vocalParams)
+    succes = GetTractParams(sn,vocalParams)
 
     if(debugMsg ==True):
             if(succes > 0):
@@ -266,10 +276,13 @@ def synthSpeech(vocalTractParams, glottisParams,numTubeSections, numFrames,frame
     nF = c_int(numFrames)
     fR = double(frameRate)
 
-    SynthBlock(tractParams2,glottisParams2,tubeArea_cm2,tubeArticulator,nF,fR,audio_out,ref(numAudioSamples))
+    suc = SynthBlock(tractParams2,glottisParams2,tubeArea_cm2,tubeArticulator,nF,fR,audio_out,ref(numAudioSamples))
+    print("Synth reports Failure: ",suc)
     print("NumAudioSamples: ",numAudioSamples.value)
-    a_out = [int((audio_out[i]*125) + 125) for i in range(numAudioSamples.value)]
-    return (a_out,numAudioSamples.value)
+    a_out = [audio_out[i] for i in range(numAudioSamples.value)]
+    tubeAreas = [tubeArea_cm2[i] for i in range(tubeArea_cm2._length_)]
+    articulators = [tubeArticulator[i].decode('utf-8') for i in range(tubeArticulator._length_)]
+    return (a_out,numAudioSamples.value,tubeAreas,articulators)
 
 #// ****************************************************************************
 #// Resets the synthesis from a sequence of tubes (see vtlTubeSynthesisAdd() below).
@@ -302,9 +315,9 @@ def resetSynthesis():
 #// o newGlottisParams
 #// ****************************************************************************
 def addToSynthesis(numNewSamples, tubeLengthsList, tubeAreasList, ArticulatorsList, incisorGlottisDist_meters,
-                   velumArea_meters2, aspirationStrengthDecibles,numGlottisParams):
+                   velumArea_meters2, aspirationStrengthDecibles,numGlottisParams,audio):
     numNS = c_int(numNewSamples)
-    audio = (double * numNewSamples)()
+    audio = (double * len(audio))(*audio)
     if(len(tubeLengthsList) != len(tubeAreasList)):
         print("MalFormed tube LengthList and Tube Area List in AddToSynthesis(), Check lengths")
 
@@ -316,7 +329,7 @@ def addToSynthesis(numNewSamples, tubeLengthsList, tubeAreasList, ArticulatorsLi
     aStrengthdB = double(aspirationStrengthDecibles)
     newGlottisState = (double * numGlottisParams)()
     TubeSynthesisAdd(numNS,audio,tubeLengths,tubeAreas,articulators,incisorPos,velumOpen,aStrengthdB,newGlottisState)
-    a_out = [int((audio[i]*125) + 125) for i in range(audio._length_)]
+    a_out = [audio[i] for i in range(audio._length_)]
     newGlottis = [newGlottisState[i] for i in range(newGlottisState._length_)]
     return (newGlottis,a_out)
 
