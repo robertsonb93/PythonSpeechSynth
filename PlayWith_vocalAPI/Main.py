@@ -40,17 +40,39 @@ def generateGlottis(Gparams,numFrames):
             glottis.append(random.uniform(Gparams[2][j],Gparams[1][j]))
     return glottis
 
-def breathyGlottis(numFrames):
+def breathyGlottis(numFrames):#this is pulled from Triangular glottis model in the speaker file
     glottis = list()
     for i in range(numFrames):
-        glottis.append(105.104613)
+        glottis.append(120)
         glottis.append(1000.000)
-        glottis.append(0.000445)
-        glottis.append(0.000396)
-        glottis.append(0.000025)
-        glottis.append(0.885903)
-        glottis.append(0.00)
+        glottis.append(0.000347)
+        glottis.append(0.000298)
+        glottis.append(0.000000)
+        glottis.append(-35)
 
+    return glottis
+
+def SBGlottis(numFrames):#this is pulled from Triangular glottis model in the speaker file
+    glottis = list()
+    for i in range(numFrames):
+        glottis.append(120)
+        glottis.append(1000.000)
+        glottis.append(0.000245)
+        glottis.append(0.000197)
+        glottis.append(0.000000)
+        glottis.append(-20)
+
+    return glottis
+
+def fullyOpenGlottis(numFrames):
+    glottis = list()
+    for i in range(numFrames):
+        glottis.append(120)
+        glottis.append(1000.000)
+        glottis.append(0.002002)
+        glottis.append(0.002002)
+        glottis.append(0.000000)
+        glottis.append(0)
     return glottis
 
 def generateVocalTract(shapes,numVocalTractParams):
@@ -91,69 +113,63 @@ magPhase = vtl.getTransferFunctions(VTPLite, 500)#I think this is what this expe
 
 vtl.resetSynthesis()
 
-print("Adding synthesis")
-#For AddToSynthesis we need to generate some tubeListLengths in meters
-###for i in range(15):
-#    tubes = generateTubeLengthsnAreas()
-#    articulates = generateArticulates()
-#    incisorGlottisDist = random.uniform(0,1)
-#    velumArea = random.uniform(0.1,0.35)
-#    pressure = int(random.uniform(0,2000))
-#   # newGlottisnAudio = vtl.addToSynthesis(sampleRate,tubes[0],tubes[1],articulates,incisorGlottisDist
-#  #                                        ,velumArea,pressure,numGlottisParams )
-#    print(i) #And add to synthesis does a whole lot of zeros for the returns values
-
-
-#Im not quite sure the relationship between addtoSynthesis and synthblock(inside synth speech)
-#but trying to run add to synthesis after synthblock will crash python.
-
 numFrames = 4
 frameRate = 1
 
-glottisParams = generateGlottis(GlottisParams,numFrames)
-for i in range(int(len(glottisParams)/6)):
-    glottisParams[(i*6)+1] = 1700.00;
 
 blurr = ['a','e','i','o','u','y','2']
 shapes = list()
 for i in range(numFrames):
-    shapes.append('a')
     shapes.append('i')
-   # shapes.append('tb-velar-stop(a)')
+    
+shapes = blurr
 
-glottisParams = breathyGlottis(numFrames)
+glottisParams = fullyOpenGlottis(numFrames)
 
+out = list()
 VTP = generateVocalTract(shapes,numVocalTractParams)
 
-synthSpeechRet = vtl.synthSpeech(VTP,glottisParams,40,numFrames,frameRate,sampleRate)
+import matplotlib.pyplot as plt
 
 
-tubes = list()
-artics = ''.join(i for i in synthSpeechRet[3])
-artics = bytearray(map(ord,artics))
+tubeLength = 0.00015
+for i in range(3):
 
-for i in synthSpeechRet[2]:
-    tubes.append(random.uniform(0.0045,0.045))
+    synthSpeechRet = vtl.synthSpeech(VTP,glottisParams,40,numFrames,frameRate,sampleRate)
+    if i > 0 :
+        glottisParams = breathyGlottis(numFrames)
+
+    if i == 1:
+        glottisParams = SBGlottis(numFrames)
+
+    artics = ''.join(i for i in synthSpeechRet[3])
+    artics = bytearray(map(ord,artics))
+
+    tubeAreas = list()
+    for i in range((int(len(synthSpeechRet[2])))):
+        tubeAreas.append( synthSpeechRet[2][i]/100) # because we were returned with cm2, but need to give it in m2
+
+    velum = tubeAreas[16]
+    tubelengths = list()
+    for i in range(len(tubeAreas)):
+        tubelengths.append(tubeLength)#my reading suggests that the pharynx on a human is between 12-14cm(0.12m) 0.003 * 40 sections = 0.12m
+    
+    
+    print(sum(tubelengths))
+    aspStrength = glottisParams[5]
+    incdist = 0.1532
+
+    Audio  = vtl.addToSynthesis(tubelengths,tubeAreas,artics,incdist,velum,aspStrength,glottisParams,synthSpeechRet[0])
+  
+    out = out + Audio
 
 
-
-   
-incdist1 = sum(tubes)
-incdist2 = sum(tubes,0.01)
-velum1 = 0.0001
-velum2 = 0.0001
-newGltAudio  = vtl.addToSynthesis(synthSpeechRet[1],tubes,synthSpeechRet[2],artics,incdist1,velum1,glottisParams[6],numGlottisParams,synthSpeechRet[0])
-newGltAudio2  = vtl.addToSynthesis(synthSpeechRet[1],tubes,synthSpeechRet[2],artics,incdist2,velum2,glottisParams[6],numGlottisParams,newGltAudio[1])
-
-
-synthSpeechRet = vtl.synthSpeech(VTP,glottisParams,40,numFrames,frameRate,sampleRate)
-
-out =  synthSpeechRet[0] + newGltAudio[1] + newGltAudio2[1]
-#out = newGltAudio2[1]
 
 byteRate = 2
 vtl.list_to_wave("audioOut.wav",out,byteRate,sampleRate)
 
+plt.plot(out)
+plt.show()
 
 vtl.CloseSpeaker()
 

@@ -46,7 +46,7 @@ ApiTest1.restype = None
 ApiTest2.restype = None
 GesToWav.restype = c_int
 
-#define the types that your C# function will use as arguments
+#define the types that your C function will use as arguments
 Initialize.argtype = [ctypes.c_char_p]
 Close.argtype = []
 
@@ -75,15 +75,22 @@ def list_to_wave(filename,audio,byteRate,sampleRate):
     w = wave.open(filename,'w')
     #nchannels, sampwidth(how bits per sample), framerate, nframes, comptype, compname
     w.setparams((1, byteRate, sampleRate, len(audio), 'NONE', 'noncompressed'))
+    countPos = 0
+    countNeg = 0
+
     for a in audio:
         if a < -1:
             a = -1
+            countNeg = countNeg + 1
+
         else:
             if a > 1:
                 a = 1
-
+                countPos = countPos + 1
+    
+       
         w.writeframesraw( struct.pack('<h', int((a*depth) )))
-
+    print("countNeg = ",countNeg,"\ncountPos = " ,countPos)
     w.close()
 
 def initSpeaker(SpeakerFile,debugMsg):
@@ -96,11 +103,10 @@ def initSpeaker(SpeakerFile,debugMsg):
             print("Failed Initialize on speaker: ",s)
     else:
         Initalize(s)
-    #return c_charp(s)
+
 
 def CloseSpeaker():
     Close()
-#audio = wave_to_double("..\\..\\VTL2.1\\Example5-Hallo-synth.wav");
 
 def GetAPIVersion():
     print("Get Version")
@@ -159,6 +165,8 @@ def getTractParams(numVocalTractParams):
 #// by spaces. This string should have at least 10*numParams elements.
 # Requires the number of GlottisParams from getSpeakerConstants()
 #Will return a set of lists, consisting of the GlottisNames, the min,max,and neutral parameter values
+#If you look in the speaker file, it shows there are several glottis models, if you check, there is a flag 
+# called selected to the name "<glottis_model type="Triangular glottis" selected="1">" this decides the choice
 #// ****************************************************************************
 def getGlottisParams(numGlottisParams):
     aSize = numGlottisParams;
@@ -314,26 +322,27 @@ def resetSynthesis():
 #// The new glottis model state is given by the vector:
 #// o newGlottisParams
 #// ****************************************************************************
-def addToSynthesis(numNewSamples, tubeLengthsList, tubeAreasList, ArticulatorsList, incisorGlottisDist_meters,
-                   velumArea_meters2, aspirationStrengthDecibles,numGlottisParams,audio):
-    numNS = c_int(numNewSamples)
-    audio = (double * len(audio))(*audio)
+def addToSynthesis(tubeLengthsList, tubeAreasList, articulatorsList, incisorGlottisDist_meters,
+                   velumArea_meters2, aspirationStrengthDecibles,newGlottis,audio):
+    numNS = c_int(len(audio))
+    audio_c = (double * len(audio))(*audio)
+
     if(len(tubeLengthsList) != len(tubeAreasList)):
         print("MalFormed tube LengthList and Tube Area List in AddToSynthesis(), Check lengths")
 
     tubeLengths = (double * len(tubeLengthsList))(*tubeLengthsList)
     tubeAreas = (double * len(tubeAreasList))(*tubeAreasList)
-    articulators = (c_char * len(ArticulatorsList))(*ArticulatorsList)
+    articulators = (c_char * len(articulatorsList))(*articulatorsList)
     incisorPos = double(incisorGlottisDist_meters)
     velumOpen = double(velumArea_meters2)
     aStrengthdB = double(aspirationStrengthDecibles)
-    newGlottisState = (double * numGlottisParams)()
-    TubeSynthesisAdd(numNS,audio,tubeLengths,tubeAreas,articulators,incisorPos,velumOpen,aStrengthdB,newGlottisState)
-    a_out = [audio[i] for i in range(audio._length_)]
-    newGlottis = [newGlottisState[i] for i in range(newGlottisState._length_)]
-    return (newGlottis,a_out)
+    newGlottisState = (double * len(newGlottis))(*newGlottis)
+    
+    TubeSynthesisAdd(numNS,audio_c,tubeLengths,tubeAreas,articulators,incisorPos,velumOpen,aStrengthdB,newGlottisState)
+    a_out = [audio[i] for i in range(audio_c._length_)]
+    return a_out
 
-#These MUST be called before initialize is called
+#TThese are called WITHOUT ever calling initialize or close.
 def test1(speakerFile, audioList):
     speaker = speakerFile.encode('utf-8')
     numSamples = c_int(len(audioList))
@@ -347,6 +356,3 @@ def test2(speakerFile, audioList):
     audio = (double * numSamples.value)(*audioList)
     ApiTest2(speaker, audio, ref(numSamples))
 
-#I think the way to work with this API for ML purposes is going to be by loading a speaker, then modifiying it using TubesynthesisAdd, if 
-#i understand it correctly(though I probably dont). 
-#Perhaps we start with vtlSynthBlock and create the "model" to be synthesized, theen use the tubesynthesis mentioned above
