@@ -40,7 +40,7 @@ def generateGlottis(Gparams,numFrames):
             glottis.append(random.uniform(Gparams[2][j],Gparams[1][j]))
     return glottis
 
-def breathyGlottis(numFrames):#this is pulled from Triangular glottis model in the speaker file
+def breathyGlottis(numFrames):#this is pulled from Triangular glottis model in the speaker file#THis is for human use.
     glottis = list()
     for i in range(numFrames):
         glottis.append(120)
@@ -52,7 +52,7 @@ def breathyGlottis(numFrames):#this is pulled from Triangular glottis model in t
 
     return glottis
 
-def SBGlottis(numFrames):#this is pulled from Triangular glottis model in the speaker file
+def SBGlottis(numFrames):#this is pulled from Triangular glottis model in the speaker file#THis is for human use.
     glottis = list()
     for i in range(numFrames):
         glottis.append(120)
@@ -64,7 +64,7 @@ def SBGlottis(numFrames):#this is pulled from Triangular glottis model in the sp
 
     return glottis
 
-def fullyOpenGlottis(numFrames):
+def fullyOpenGlottis(numFrames):#THis is for human use.
     glottis = list()
     for i in range(numFrames):
         glottis.append(120)
@@ -75,7 +75,7 @@ def fullyOpenGlottis(numFrames):
         glottis.append(0)
     return glottis
 
-def generateVocalTract(shapes,numVocalTractParams):
+def generateVocalTract(shapes,numVocalTractParams):#THis is for human use.
     params = list()
 
     for s in shapes:
@@ -117,12 +117,10 @@ numFrames = 4
 frameRate = 1
 
 
-blurr = ['a','e','i','o','u','y','2']
-shapes = list()
-for i in range(numFrames):
-    shapes.append('i')
-    
-shapes = blurr
+bs = ['a','e','i','o','u','y','2'] #this is not comprehensive of basic vowel tracts
+tn = ['tt-alveolar-nas(a)','tt-alveolar-nas(i)','tt-alveolar-nas(u)'] #closed tongue nasal passage 
+
+shapes = [tn[1],bs[4]]
 
 glottisParams = fullyOpenGlottis(numFrames)
 
@@ -132,15 +130,14 @@ VTP = generateVocalTract(shapes,numVocalTractParams)
 import matplotlib.pyplot as plt
 
 
-tubeLength = 0.00015
+tubeLength = 0.0025
 for i in range(3):
 
+    
     synthSpeechRet = vtl.synthSpeech(VTP,glottisParams,40,numFrames,frameRate,sampleRate)
-    if i > 0 :
-        glottisParams = breathyGlottis(numFrames)
 
-    if i == 1:
-        glottisParams = SBGlottis(numFrames)
+    glottisParams = breathyGlottis(numFrames)
+
 
     artics = ''.join(i for i in synthSpeechRet[3])
     artics = bytearray(map(ord,artics))
@@ -149,6 +146,7 @@ for i in range(3):
     for i in range((int(len(synthSpeechRet[2])))):
         tubeAreas.append( synthSpeechRet[2][i]/100) # because we were returned with cm2, but need to give it in m2
 
+    #tubeAreas[len(tubeAreas)-1] = 0
     velum = tubeAreas[16]
     tubelengths = list()
     for i in range(len(tubeAreas)):

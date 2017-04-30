@@ -6,7 +6,7 @@
     <ProjectGuid>814ea0aa-eafe-48e4-86b6-1b35e848a377</ProjectGuid>
     <ProjectHome>
     </ProjectHome>
-    <StartupFile>Main.py</StartupFile>
+    <StartupFile>MLAttempt.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
@@ -23,7 +23,16 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Main.py" />
+    <Compile Include="HumanAttempt.py" />
+    <Compile Include="MLAttempt.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="TextScraper.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="TrainingDataGen.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="vtlPythonAPI.py" />
   </ItemGroup>
   <PropertyGroup>
