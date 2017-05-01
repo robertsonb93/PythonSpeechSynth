@@ -102,7 +102,7 @@ def initSpeaker(SpeakerFile,debugMsg):
         else:
             print("Failed Initialize on speaker: ",s)
     else:
-        Initalize(s)
+        Initialize(s)
 
 
 def CloseSpeaker():

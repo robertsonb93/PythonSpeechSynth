@@ -47,8 +47,10 @@ def genFrame(count):
     frameRateVariants = list()
     shift = 1/(count/2)
     for i in range(count):      
-        numFramesVariants.append(i+1)  # we will see (1,5) for count = 5
-        frameRateVariants.append( (1 / (i+1) + shift)) #we will see (1.4,0.6) for count = 5
+   #     numFramesVariants.append(i+1)  # we will see (1,5) for count = 5
+         numFramesVariants.append(2)
+         frameRateVariants.append(1)
+    #    frameRateVariants.append( (1 / (i+1) + shift)) #we will see (1.4,0.6) for count = 5
 
     return [numFramesVariants,frameRateVariants]
 
@@ -71,7 +73,7 @@ def genTubeLen(minLen,maxLen,tubeSectionCount,variants):
         TubeLengthSets.append(currPerm)
         incisorDistVariants.append(sum(currPerm))
 
-    return [TubeLengthSets,incisorDistVariants]
+    return [incisorDistVariants,TubeLengthSets]
 
 #This function is the entry point for generating test data parameters,
 # it will call appropriate sub functions to build the needed test sets.
@@ -113,7 +115,7 @@ def generateValues(spkr,numGlottisStates,maxFrames,tubeVariants,minTube,maxTube,
 
     print("Total glottal states: ", len(glottisStates))
     print("Total vocal tract states: ",len(VTPStates))
-    glotVTLsize = (len(glottisStates)*len(VTPStates))**2
+    glotVTLsize = ((len(glottisStates)**2) *len(VTPStates))
 
     print("Generating ",glotVTLsize, " glottis,VTP variants (with old and new state)")
     print("Total numFrames && frameRate variations ", len(numFrames))
@@ -121,9 +123,60 @@ def generateValues(spkr,numGlottisStates,maxFrames,tubeVariants,minTube,maxTube,
     print("Total TubeLength variations ",len(TubeLengthSets))
     print("Total velum variations ",len(velum))
 
-    print("Total sound permutations possible is ",len(velum)*len(incisors)*
+    print("Total sound combinations possible is ",len(velum)*len(incisors)*
           len(TubeLengthSets)*len(numFrames)*len(frameRates)*glotVTLsize)
+
+    vtl.CloseSpeaker()
 
     return [glottisStates,VTPStates,numFrames,frameRates,incisors,TubeLengthSets,velum]
 
-#def generateAudio
+
+
+#We need to select a subset of the parameters, since we likely got much more then be used. 
+#Returns a list of lists
+#each sublist is the parameters used and the audio synthesized from it. order as
+#[glottisOld ,glottisNew ,VTP,numFrames ,frameRates ,incisors ,tubeLens ,velum ,audio]
+def generateAudio (parameters, sampleCountDesired,spkr):
+    #3 main functions used, 
+    #vtl.resetSynthesis()
+    #vtl.synthSpeech(VTP,glottisParams,40,numFrames,frameRate,sampleRate)
+    #vtl.addToSynthesis(tubelengths,tubeAreas,artics,incdist,velum,aspStrength,glottisParams,audio_in)
+    vtl.initSpeaker(spkr,False)
+    [srate,tubeSecs,vParam,gParam] = vtl.getSpeakerConstants()
+    usedList = list()
+    #we need to select some parameters, 
+
+
+    #The parameters in used look like
+    #[glottisOld 0,glottisNew 1, ,vtpNew 2,numFrames 3,frameRates 4,incisors 5,tubeLens 6,velum 7]
+    for sample in range(sampleCountDesired):
+        used = list()
+        count =0 
+        for p in parameters:
+            used.append(rand.choice(p))
+            if(count < 1):
+                used.append(rand.choice(p)) #This is so we have a second glottis and second VTP for a start/end
+            count = count + 1
+
+        vtl.resetSynthesis()
+        #Now we can generate the fundamental sound and get the remaining parameters for the tube synth.
+        [a_pre,unused,areas,articulators] = vtl.synthSpeech(used[1],used[0],tubeSecs,used[3],used[4],srate)
+
+        #Formating on the articulators and tubeAreas
+        artics = ''.join(i for i in articulators)
+        artics = bytearray(map(ord,artics))
+        tubeAreas = [(x/100) for x in areas] #divide since, it was returned in cm instead of the needed meters
+
+        #dummy sets up the starting state, and the a_post is the actual sound we are interested in.
+        dummy = vtl.addToSynthesis(used[6],tubeAreas,artics,used[5],used[7],used[0][5],used[0],a_pre)
+        a_post = vtl.addToSynthesis(used[6],tubeAreas,artics,used[5],used[7],used[1][5],used[1],a_pre)
+        used.append(a_post)
+        
+        print("Finished synthesizing ",sample+1, " of ", sampleCountDesired)
+        usedList.append(used)
+        
+    
+    return usedList
+
+
+    

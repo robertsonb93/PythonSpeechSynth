@@ -3,15 +3,24 @@ import vtlPythonAPI as vtl
 import tensorflow as tf
 import TextScraper as sc
 import TrainingDataGen as tdg
+import matplotlib.pyplot as plt
 
 spkr ="test1.speaker"
 maxLen = 0.005 #if they all come out at max length 20cm
 minLen = 0.0025 #if they all come out at min length 10cm
-tdg.generateValues(spkr,3,4,3,minLen,maxLen,3)
+paramset = tdg.generateValues(spkr,4,1,3,minLen,maxLen,3)
+trainSet = tdg.generateAudio(paramset,4,spkr)
 
 
-#[audio, numsamples, tubesAreas,articulators] = vtl.synthSpeech(VTP,glottisParams,tubeSectionCount,numFrames,frameRate,audioSampleRate)
-#Audio  = vtl.addToSynthesis(tubelengths,tubeAreas,artics,incdist,velum,aspStrength,glottisParams,synthSpeechRet[0])
+for s in trainSet:
+    plt.plot(s[len(s)-1])
+    plt.show()
+
+
+#trainSet looks like:
+#[glottisOld ,glottisNew ,VTP,numFrames ,frameRates ,incisors ,tubeLens ,velum ,audio]
+
+
 
 
 #lets see if we can get it to match a single sound.
