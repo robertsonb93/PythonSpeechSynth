@@ -142,8 +142,8 @@ def getSpeakerConstants():
 # will return a a set of lists, consisting of the TractNames, the minimum, max, and neutral parameter values
 #// ****************************************************************************
 def getTractParams(numVocalTractParams):
-    aSize = numVocalTractParams*10; 
-    tractNames = (c_char *aSize)(0)
+    aSize = numVocalTractParams; 
+    tractNames = (c_char *(aSize*100))(0)
     paramMin = (double * aSize)(0)
     paramMax = (double * aSize)(0)
     paramNeutral = (double * aSize)(0)
@@ -197,7 +197,7 @@ def getGlottisParams(numGlottisParams):
 def getVocalTractParamsfromShape(numVocalTractParams,shapeName,debugMsg):
     size = numVocalTractParams;
     sn = c_charp(shapeName.encode())
-    vocalParams = (double * size)();
+    vocalParams = (double * size)(0);
     succes = GetTractParams(sn,vocalParams)
 
     if(debugMsg ==True):
@@ -277,8 +277,8 @@ def synthSpeech(vocalTractParams, glottisParams,numTubeSections, numFrames,frame
     tractParams2 = (double * (len(vocalTractParams)))(*vocalTractParams)
     glottisParams2 = (double * (len(glottisParams)))(*glottisParams)
 
-    tubeArea_cm2 = (double * (numTubeSections*numFrames))()
-    tubeArticulator =(c_char * (numTubeSections*numFrames))()#could be up to 40 i think
+    tubeArea_cm2 = (double * ((numTubeSections*numFrames)))()
+    tubeArticulator =(c_char *( (numTubeSections*numFrames)))()
     audio_out = (double * (int(numFrames/frameRate)*audioSampleRate))()
     numAudioSamples = (c_int)()
     nF = c_int(numFrames)
@@ -325,20 +325,21 @@ def resetSynthesis():
 def addToSynthesis(tubeLengthsList, tubeAreasList, articulatorsList, incisorGlottisDist_meters,
                    velumArea_meters2, aspirationStrengthDecibles,newGlottis,audio):
     numNS = c_int(len(audio))
-    audio_c = (double * len(audio))(*audio)
+    audio_c = (double * (len(audio)))(*audio)
 
     if(len(tubeLengthsList) != len(tubeAreasList)):
         print("MalFormed tube LengthList and Tube Area List in AddToSynthesis(), Check lengths")
 
-    tubeLengths = (double * len(tubeLengthsList))(*tubeLengthsList)
-    tubeAreas = (double * len(tubeAreasList))(*tubeAreasList)
-    articulators = (c_char * len(articulatorsList))(*articulatorsList)
+    tubeLengths = (double * (len(tubeLengthsList)))(*tubeLengthsList)
+    tubeAreas = (double * (len(tubeAreasList)))(*tubeAreasList)
+    articulators = (c_char * (len(articulatorsList)))(*articulatorsList)
     incisorPos = double(incisorGlottisDist_meters)
     velumOpen = double(velumArea_meters2)
     aStrengthdB = double(aspirationStrengthDecibles)
-    newGlottisState = (double * len(newGlottis))(*newGlottis)
+    newGlottisState = (double * (len(newGlottis)))(*newGlottis)
     
     TubeSynthesisAdd(numNS,audio_c,tubeLengths,tubeAreas,articulators,incisorPos,velumOpen,aStrengthdB,newGlottisState)
+
     a_out = [audio[i] for i in range(audio_c._length_)]
     return a_out
 

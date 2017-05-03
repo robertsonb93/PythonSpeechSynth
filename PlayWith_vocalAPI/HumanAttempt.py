@@ -16,36 +16,13 @@ def breathyGlottis(numFrames):#this is pulled from Triangular glottis model in t
 
     return glottis
 
-def SBGlottis(numFrames):#this is pulled from Triangular glottis model in the speaker file#THis is for human use.
-    glottis = list()
-    for i in range(numFrames):
-        glottis.append(120)
-        glottis.append(1000.000)
-        glottis.append(0.000245)
-        glottis.append(0.000197)
-        glottis.append(0.000000)
-        glottis.append(-20)
-
-    return glottis
-
-def fullyOpenGlottis(numFrames):#THis is for human use.
-    glottis = list()
-    for i in range(numFrames):
-        glottis.append(120)
-        glottis.append(1000.000)
-        glottis.append(0.002002)
-        glottis.append(0.002002)
-        glottis.append(0.000000)
-        glottis.append(0)
-    return glottis
-
 def generateVocalTract(shapes,numVocalTractParams):#THis is for human use.
     params = list()
 
     for s in shapes:
         shapeParams = vtl.getVocalTractParamsfromShape(numVocalTractParams,s,False)
         for i in range (len(shapeParams[0])):
-            params.append(shapeParams[0][i])
+            params.append(shapeParams[0][i]) #This could be params = params + shapeParams[0]
     return params
 
 
@@ -71,18 +48,17 @@ frameRate = 1
 bs = ['a','e','i','o','u','y','2'] #this is not comprehensive of basic vowel tracts
 tn = ['tt-alveolar-nas(a)','tt-alveolar-nas(i)','tt-alveolar-nas(u)'] #closed tongue nasal passage 
 
-shapes = [tn[1],bs[4]]
+shapes = [tn[1],bs[1],bs[4],tn[0]] #we need as many shapes as we have frames. a shape per frame.
 print("Shapes are: ",shapes)
 
 glottisParams = breathyGlottis(numFrames)
 
 out = list()
 VTP = generateVocalTract(shapes,numVocalTractParams)
-#vtl.resetSynthesis()
-tubeLength = 0.0025
-for i in range(10):
 
-    
+tubeLength = 0.0025
+
+for i in range(10):
     synthSpeechRet = vtl.synthSpeech(VTP,glottisParams,40,numFrames,frameRate,sampleRate)
 
     tubeAreas = list()
@@ -104,13 +80,16 @@ for i in range(10):
     tubeAreaFrames = [tubeAreas[x:x+numberTubeSections] for x in range(0,len(tubeAreas),numberTubeSections)]
     articFrames = [synthSpeechRet[3][x:x+numberTubeSections] for x in range(0,len(tubeAreas),numberTubeSections)]
     print("Audio Frames: ",len(audioFrames), "\nTubeArea Frames: ",len(tubeAreaFrames), "\nartic Frames: ", len(articFrames))
+
+
     for i in range(len(audioFrames)):
           print(len(audioFrames[i]))
           artics = ''.join(i for i in articFrames[i])
           artics = bytearray(map(ord,artics))
           Audio = vtl.addToSynthesis(tubelengths,tubeAreas,artics,incdist,velum,aspStrength,glottisParams,audioFrames[i])
           out = out + Audio
-  
+   
+    
     
 
 
