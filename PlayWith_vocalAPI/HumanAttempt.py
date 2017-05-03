@@ -58,7 +58,7 @@ VTP = generateVocalTract(shapes,numVocalTractParams)
 
 tubeLength = 0.0025
 
-for i in range(10):
+for i in range(5):
     synthSpeechRet = vtl.synthSpeech(VTP,glottisParams,40,numFrames,frameRate,sampleRate)
 
     tubeAreas = list()
@@ -88,18 +88,15 @@ for i in range(10):
           artics = bytearray(map(ord,artics))
           Audio = vtl.addToSynthesis(tubelengths,tubeAreas,artics,incdist,velum,aspStrength,glottisParams,audioFrames[i])
           out = out + Audio
-   
+          vtl.resetSynthesis()
     
-    
-
 
 vtl.CloseSpeaker()
 
+
 byteRate = 2
-vtl.list_to_wave("audioOut.wav",out,byteRate,sampleRate)
+#vtl.list_to_wave("audioOut.wav",out,byteRate,sampleRate)
 
 import matplotlib.pyplot as plt
 plt.plot(out)
-plt.show()
-
-
+plt.savefig('eachloopVltReset.pdf')
