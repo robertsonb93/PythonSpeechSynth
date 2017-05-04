@@ -6,7 +6,7 @@
     <ProjectGuid>814ea0aa-eafe-48e4-86b6-1b35e848a377</ProjectGuid>
     <ProjectHome>
     </ProjectHome>
-    <StartupFile>HumanAttempt.py</StartupFile>
+    <StartupFile>MLAttempt.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>

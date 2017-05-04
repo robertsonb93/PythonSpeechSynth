@@ -4,22 +4,27 @@ import tensorflow as tf
 import TextScraper as sc
 import TrainingDataGen as tdg
 import matplotlib.pyplot as plt
+import time
 
 spkr ="test1.speaker"
-maxLen = 0.005 #if they all come out at max length 20cm
-minLen = 0.0025 #if they all come out at min length 10cm
-paramset = tdg.generateValues(spkr,4,1,3,minLen,maxLen,3)
-trainSet = tdg.generateAudio(paramset,4,spkr)
+maxLen = 0.005 #if they all come out at max length it will be 20cm
+minLen = 0.0025 #if they all come out at min length it will be 10cm
+paramset = tdg.generateValues(spkr,10,2,3,minLen,maxLen)
 
+count = 0
+t_start = time.process_time()
+avg = 0
+for p in paramset:
+    count = count +1
 
-for s in trainSet:
-    plt.plot(s[len(s)-1])
-    plt.show()
+    start = time.process_time()
+    trainSet = tdg.generateAudio(p,spkr)
+    t = time.process_time()-start
+    avg = (t+ (count-1)*avg)/count
+    print("It took ",t, "to finish one synthesis. Estimated ",avg*(len(paramset)-count), " seconds remaining.")
 
-
-#trainSet looks like:
-#[glottisOld ,glottisNew ,VTP,numFrames ,frameRates ,incisors ,tubeLens ,velum ,audio]
-
+t_end = time.process_time()
+print("Total Training generation time = ",t_end-t_start)
 
 
 

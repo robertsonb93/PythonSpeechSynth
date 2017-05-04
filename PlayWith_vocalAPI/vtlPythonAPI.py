@@ -279,7 +279,7 @@ def synthSpeech(vocalTractParams, glottisParams,numTubeSections, numFrames,frame
 
     tubeArea_cm2 = (double * ((numTubeSections*numFrames)))()
     tubeArticulator =(c_char *( (numTubeSections*numFrames)))()
-    audio_out = (double * (int(numFrames/frameRate)*audioSampleRate))()
+    audio_out = (double * (int((numFrames/frameRate)*audioSampleRate)))()
     numAudioSamples = (c_int)()
     nF = c_int(numFrames)
     fR = double(frameRate)

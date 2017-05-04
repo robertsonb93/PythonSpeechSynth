@@ -3,8 +3,10 @@ import vtlPythonAPI as vtl
 import random as rand
 import time
 
+#NumStates is the number glottis states we want to produce
+#GlottisCount is the number of parameters the glottis model has
+#Glottis params contains the min,max,neutral values for each glottis parameter
 def genGlottis(NumStates,glottisCount,GlottisParams):
-    print("Generating Glottis")
     #lets generate a range of possible glottis 
     glottisStates = list()
     genParams = list()
@@ -12,6 +14,7 @@ def genGlottis(NumStates,glottisCount,GlottisParams):
         rng = GlottisParams[2][gc] - GlottisParams[1][gc]
         stepsize = rng / NumStates
         currParam = list()
+
         for step in range(NumStates):
             val = GlottisParams[1][gc] + (step * stepsize)
             if(val <= GlottisParams[2][gc]):
@@ -26,8 +29,10 @@ def genGlottis(NumStates,glottisCount,GlottisParams):
     for perm in itertools.product(*(tuple(genParams))): 
         glottisStates.append(list(perm))
 
-    print("Glottis complete.")
-    return glottisStates
+    ret = list()
+    for n in range(NumStates):
+        ret = ret + (rand.choice(glottisStates))
+    return ret
 
 #Instead of generating vocal tract parameters on our own, 
 #lets just use those(about 64) defined in the speaker file
@@ -38,19 +43,21 @@ def genVTP(spkr,VTPsize):
     shapeParams = list()
     for shape in VocalShapes:
         shapeParams.append(vtl.getVocalTractParamsfromShape(VTPsize,shape,False)[0])
+
     
     return shapeParams
 
-def genFrame(count):
-        #We generate our needed variations for frames and lengths of each frame
+#We will generate count many variants, in the range of minFrame to maxFrame
+def genFrame(count,minFrame,maxFrame):
+    #We generate our needed variations for frames and lengths of each frame
+    #The frameRateVariants could use some work, but i based them on average english syllables, which is 6.19 Syllables per second.
     numFramesVariants = list()
     frameRateVariants = list()
-    shift = 1/(count/2)
+    dist = int((maxFrame - minFrame)/count)
+
     for i in range(count):      
-   #     numFramesVariants.append(i+1)  # we will see (1,5) for count = 5
-         numFramesVariants.append(2)
-         frameRateVariants.append(1)
-    #    frameRateVariants.append( (1 / (i+1) + shift)) #we will see (1.4,0.6) for count = 5
+         numFramesVariants.append(minFrame+(i*dist))
+         frameRateVariants.append(rand.uniform(4,8))
 
     return [numFramesVariants,frameRateVariants]
 
@@ -60,20 +67,39 @@ def genFrame(count):
 #im not actually sure if this is correct, but i believe it is quite close.
 #We generate the lengths for each tube (these seem to follow the pattern of progressively shrinking)
 #This portion is iffy, its easy to create far to many, and I dont a good guideline for setting the variation of them
-def genTubeLen(minLen,maxLen,tubeSectionCount,variants):
-    TubeLengthSets = list() #this will be length  tube section Count
+def genTubeLen(variants,minLen,maxLen,tubeSectionCount):
+    ret = list() #this will be length tube section Count
     incisorDistVariants = list()
     for v in range(variants):
+        dist =0;
         PrevLen = maxLen
-        currPerm = list()
-        currPerm.append(PrevLen)
-        for tubeSect in range(tubeSectionCount-1):
-            currPerm.append(PrevLen)
+        ret.append(PrevLen)
+        for tubeSect in range(tubeSectionCount-1):        
             PrevLen = rand.uniform(minLen,PrevLen) #enforce that no tube is longer then the previous, we can end up will all being minimally short.
-        TubeLengthSets.append(currPerm)
-        incisorDistVariants.append(sum(currPerm))
+            ret.append(PrevLen)
+            dist = dist +PrevLen
 
-    return [incisorDistVariants,TubeLengthSets]
+        incisorDistVariants.append(dist)
+
+    return [incisorDistVariants,ret]
+
+
+
+class ParamSet:
+    numFrames = 0
+    FPS = 0
+    glottis = list()
+    glottisStart = list()
+    vtp = list()
+    vtpStart = list()
+    tubeLengths = list()
+    tubeLengthsStart = list()
+    incisor = list()
+    incisorStart = 0
+    velum = list()
+    velumStart = 0
+    audio = list()
+
 
 #This function is the entry point for generating test data parameters,
 # it will call appropriate sub functions to build the needed test sets.
@@ -85,50 +111,55 @@ def genTubeLen(minLen,maxLen,tubeSectionCount,variants):
     #   Lengths for each tube in meters
     #   Distance from the glottis to the incisors (front teeth) in meters
     #   Then area in m^2 of the velum
-def generateValues(spkr,numGlottisStates,maxFrames,tubeVariants,minTube,maxTube,velumVariants):
+def generateValues(spkr,count,minFrames,maxFrames,minTube,maxTube):
+
     vtl.initSpeaker(spkr,True)
     rand.seed(time.time())
-
+    start = time.process_time()
     #we get the audio sampling rate,
     #The number of tube sections that the speaker has.
     #the number of parameters the speaker uses to perform any sound
     #the number of parameters(based on model) the speaker has for their glottis
     [audioSampleRate,tubeSectionCount,vocalTractCount,glottisCount] = vtl.getSpeakerConstants()
-
     VocalTractParams = vtl.getTractParams(vocalTractCount)
     GlottisParams = vtl.getGlottisParams(glottisCount)
-
-    #We Can generate Test data by making permutations of the shapes from the vocal tracts and glottis
+    VTPStates = genVTP(spkr,vocalTractCount) #We only need to call this once since it needs to scrape all the parameters from a text file.
     
-    glottisStates = genGlottis(numGlottisStates,glottisCount,GlottisParams)
-    VTPStates = genVTP(spkr,vocalTractCount)
-    [numFrames,frameRates] = genFrame(maxFrames)
-    [incisors,TubeLengthSets] = genTubeLen(minTube,maxTube,tubeSectionCount,tubeVariants)
 
-    #we generate some velum openings in m^2, these are supposed to be between the 16th and 17th tubes,
-    #which  from examples i have seen range in area of about 0.65 to 4.5 cm^2 or 0.045m^2
-    velum = list()
-    for i in range(velumVariants):
-        velum.append(rand.uniform(0.0065,0.045))
+    retParams = list()
+    [numFrames,frameRates] = genFrame(count,minFrames,maxFrames)
+    for i in range(count):
+        newParam = ParamSet()
+     
+        newParam.numFrames = numFrames[i]
+        newParam.FPS = frameRates[i]
 
+        [inc,tl] = genTubeLen(newParam.numFrames+1,minTube,maxTube,tubeSectionCount)
+        newParam.incisorStart = inc[0]
+        newParam.incisor = inc[1:len(inc)]
+        newParam.tubeLengthsStart = tl[:tubeSectionCount]
+        newParam.tubeLengths = tl[tubeSectionCount:len(tl)]
 
+        newParam.glottisStart = genGlottis(1,glottisCount,GlottisParams)#Starting glottis state
+        newParam.glottis = genGlottis(newParam.numFrames,glottisCount,GlottisParams)#This function tries to evenly distribute the states from the glottis
+        
+        newParam.vtpStart = (rand.choice(VTPStates))
+        newParam.velumStart = rand.uniform(0.0065,0.045)
 
-    print("Total glottal states: ", len(glottisStates))
-    print("Total vocal tract states: ",len(VTPStates))
-    glotVTLsize = ((len(glottisStates)**2) *len(VTPStates))
+        newParam.vtp = list()
+        newParam.velum = list()
+        for f in range(newParam.numFrames):
+            newParam.vtp = newParam.vtp + (rand.choice(VTPStates))
+            newParam.velum.append(rand.uniform(0.0065,0.045))
 
-    print("Generating ",glotVTLsize, " glottis,VTP variants (with old and new state)")
-    print("Total numFrames && frameRate variations ", len(numFrames))
-    print("Total incisor distance variants ",len(incisors))
-    print("Total TubeLength variations ",len(TubeLengthSets))
-    print("Total velum variations ",len(velum))
+        retParams.append(newParam)
 
-    print("Total sound combinations possible is ",len(velum)*len(incisors)*
-          len(TubeLengthSets)*len(numFrames)*len(frameRates)*glotVTLsize)
 
     vtl.CloseSpeaker()
 
-    return [glottisStates,VTPStates,numFrames,frameRates,incisors,TubeLengthSets,velum]
+    end = time.process_time()
+    print("Generated ",count," parameter sets in ", end - start, " seconds.")
+    return retParams
 
 
 
@@ -136,47 +167,48 @@ def generateValues(spkr,numGlottisStates,maxFrames,tubeVariants,minTube,maxTube,
 #Returns a list of lists
 #each sublist is the parameters used and the audio synthesized from it. order as
 #[glottisOld ,glottisNew ,VTP,numFrames ,frameRates ,incisors ,tubeLens ,velum ,audio]
-def generateAudio (parameters, sampleCountDesired,spkr):
+def generateAudio (param,spkr):
     #3 main functions used, 
     #vtl.resetSynthesis()
     #vtl.synthSpeech(VTP,glottisParams,40,numFrames,frameRate,sampleRate)
     #vtl.addToSynthesis(tubelengths,tubeAreas,artics,incdist,velum,aspStrength,glottisParams,audio_in)
     vtl.initSpeaker(spkr,False)
     [srate,tubeSecs,vParam,gParam] = vtl.getSpeakerConstants()
-    usedList = list()
-    #we need to select some parameters, 
 
+    #First synthSpeech to get the starting state.
+    [a_dummy,samples,areas,articulators] = vtl.synthSpeech(param.vtpStart,param.glottisStart,tubeSecs,2,1,srate)
 
-    #The parameters in used look like
-    #[glottisOld 0,glottisNew 1, ,vtpNew 2,numFrames 3,frameRates 4,incisors 5,tubeLens 6,velum 7]
-    for sample in range(sampleCountDesired):
-        used = list()
-        count =0 
-        for p in parameters:
-            used.append(rand.choice(p))
-            if(count < 1):
-                used.append(rand.choice(p)) #This is so we have a second glottis and second VTP for a start/end
-            count = count + 1
+    areas = [a/100 for a in areas]
 
-        vtl.resetSynthesis()
-        #Now we can generate the fundamental sound and get the remaining parameters for the tube synth.
-        [a_pre,unused,areas,articulators] = vtl.synthSpeech(used[1],used[0],tubeSecs,used[3],used[4],srate)
+    artics = ''.join(i for i in articulators)
+    artics = bytearray(map(ord,artics))
 
-        #Formating on the articulators and tubeAreas
-        artics = ''.join(i for i in articulators)
-        artics = bytearray(map(ord,artics))
-        tubeAreas = [(x/100) for x in areas] #divide since, it was returned in cm instead of the needed meters
-
-        #dummy sets up the starting state, and the a_post is the actual sound we are interested in.
-        dummy = vtl.addToSynthesis(used[6],tubeAreas,artics,used[5],used[7],used[0][5],used[0],a_pre)
-        a_post = vtl.addToSynthesis(used[6],tubeAreas,artics,used[5],used[7],used[1][5],used[1],a_pre)
-        used.append(a_post)
-        
-        print("Finished synthesizing ",sample+1, " of ", sampleCountDesired)
-        usedList.append(used)
-        
+    vtl.addToSynthesis(param.tubeLengthsStart,areas[:tubeSecs],artics,param.incisorStart,param.velumStart,param.glottisStart[5],param.glottis[:gParam],a_dummy)
     
-    return usedList
+   
+   
+    #Now our state is set up, we can iterate across the frames and create our desired sound
+    [a_pre, samples, areas,articulators] = vtl.synthSpeech(param.vtp,param.glottis,tubeSecs,param.numFrames,param.FPS,srate)
+    areas = [a/100 for a in areas]
+    for f in range(param.numFrames):
+        samplesPerFrame = srate * param.numFrames
+        #chunk everything into individual frames now.
+        audioFrames = [a_pre[x:x+samplesPerFrame] for x in range(0, len(a_pre),samplesPerFrame)]
+        areaFrames = [areas[x:x+tubeSecs] for x in range(0,len(areas),tubeSecs)]
+        lenFrames = [param.tubeLengths[x:x+tubeSecs] for x in range(0,len(areas),tubeSecs)]
+        articFrames = [articulators[x:x+tubeSecs] for x in range(0,len(articulators),tubeSecs)]
+
+        #Pass each chunk into the AddToSynth
+        for i in range(len(audioFrames)):
+          print(len(audioFrames[i]))
+          artics = ''.join(art for art in articFrames[i])
+          artics = bytearray(map(ord,artics))
+          window = i*gParam
+          param.audio = param.audio + vtl.addToSynthesis(lenFrames[i],areaFrames[i],artics,param.incisor[i],param.velum[i],param.glottis[5],param.glottis[window:window+gParam],audioFrames[i])
+          
+
+
+    return param
 
 
     
