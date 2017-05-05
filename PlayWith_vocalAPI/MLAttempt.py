@@ -16,9 +16,10 @@ t_start = time.process_time()
 avg = 0
 for p in paramset:
     count = count +1
-
     start = time.process_time()
+
     trainSet = tdg.generateAudio(p,spkr)
+
     t = time.process_time()-start
     avg = (t+ (count-1)*avg)/count
     print("It took ",t, "to finish one synthesis. Estimated ",avg*(len(paramset)-count), " seconds remaining.")
@@ -31,14 +32,22 @@ print("Total Training generation time = ",t_end-t_start)
 #lets see if we can get it to match a single sound.
 #the outputs from the learner are:
 
-#   Values for each vocalTractParam
-#   Values for each starting state GlottisParam
-#   Number of Frames for the sound
-#   How fast the Frames play
-#   Lengths for each tube
-#   Distance from the glottis to the incisors (front teeth)
-#   Then area in cm2 of the velum
-#   The End state Glottis paramns
+#Number of frames for the sound
+#Frames per Second
+#The Used Glottis (list of  length (numGlottisParams * numFrames))
+#The glottis state we start from (list  of  length (numGlottisParams))
+#The Vocal Tract Parameters we start from (list of length(numVocalTractParams * numFrames))
+#The Vocal Tract Parameters we start from (list of length(numVocalTractParams))
+#The Length of tubes in the Synth model (list of length (tubeSections * num Frames))
+#The legnth of tube the synth model starts from (list of length(tubeSections))
+#The distances from glottis to incisors (list of length(numFrames))
+#The starting distance from the glottis to incisors in centimeters
+#The areas of the velum (list of of length(numFrames))
+#The starting area of the velum cm2
+
+#Perhpas should try learning it a single frame at a time instead. 
+#So
+
 
 #The input to the learner would be the desired sound
 
