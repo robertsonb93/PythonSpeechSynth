@@ -1,10 +1,37 @@
 import sys
 import vtlPythonAPI as vtl
 import tensorflow as tf
+import numpy as np
 import TextScraper as sc
 import TrainingDataGen as tdg
 import matplotlib.pyplot as plt
 import time
+
+def grabWindow(inputSize,audio,outputSize,param,offset):
+    inOffset = offset * inputSize
+    outOffset = offset * outSize
+    input = (audio[inOffset:inOffset+inputSize])
+    output = (param[outOffset:outOffset+outputSize])
+
+    return [input,output]
+
+def vectorizeTraining(trainSet):
+    audioOut = list()
+    paramOut = list()
+    for t in trainSet:
+        paramOut = paramOut + t.glottis + t.vtp + t.tubeLengths + t.incisor + t.velum
+        audioOut = audioOut + t.audio
+
+    return [audioOut,paramOut]
+
+def weight_variable(shape):
+  initial = tf.random_normal(shape, stddev=0.1)
+  return tf.Variable(initial)
+
+def bias_variable(shape):
+  initial = tf.constant(0.1, shape=shape)
+  return tf.Variable(initial)
+
 
 #the outputs from the learner are:
 
@@ -28,7 +55,7 @@ maxFrames = 3
 frameRate = 4
 
 #Produce the parameters we use for the generating speech.
-paramset = tdg.generateValues(spkr,10,minFrames,maxFrames,frameRate,minLen,maxLen)
+paramset = tdg.generateValues(spkr,10000,minFrames,maxFrames,frameRate,minLen,maxLen)
 
 trainSet = list()
 count = 0
@@ -47,29 +74,49 @@ for p in paramset:
 t_end = time.process_time()
 print("Total Training generation time = ",t_end-t_start)
 
-
-for t in trainSet:
-    plt.plot(t.audio)
-    plt.show()
-
-
+#for t in trainSet:
+#    plt.plot(t.audio)
+#    plt.show()
 #lets see if we can get it to match a single sound. with only a single frame transition of audio.
-
-
-vtl.initSpeaker(spkr)
+vtl.initSpeaker(spkr,False)
 [srate,tubecount,vtcount,glotcount] = vtl.getSpeakerConstants()
-sess = tf.InteractiveSession()
-
 inSize = trainSet[0].samplesPerFrame
-
-input = tf.placeholder(tf.float32, shape=[None, inSize])
-
-#Times two for a start and end
 #Glottis + vtp + tubeLengths + incisor + velum
-outSize = (glotcount + vtcount + tubecount + 2) * 2
-y_ = tf.placeholder(tf.float32, shape=[None, outSize])
+outSize = (glotcount + vtcount + tubecount + 2) * 2#Times two for a start and end
 
+#Here we need to give it the training data. 
+[audio,params] = vectorizeTraining(trainSet)
 
+entrpy = list()
+with tf.Session() as sess:
+
+    inputAudio = tf.placeholder(tf.float32,shape=[None,inSize])
+    outActual = tf.placeholder(tf.float32,shape=[None,outSize])
+
+    #create Weights (this is basically the network)
+    W = weight_variable((inSize,outSize))
+    b = bias_variable(outSize)
+
+    outEstimate = tf.matmul(inputAudio,W) + b
+    cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=outActual, logits=outEstimate))
+    train_step = tf.train.GradientDescentOptimizer(0.5).minimize(cross_entropy)
+    init = tf.global_variables_initializer()
+    sess.run(init)
+
+    for i in range(len(trainSet)):
+      [inp,outp] = grabWindow(inSize,audio,outSize,params,(i))
+      inp = np.reshape(inp,(1,inSize))
+      outp = np.reshape(outp,(1,outSize))
+
+      (sess.run(train_step, feed_dict={inputAudio: inp, outActual: outp}))
+      entrpy.append( sess.run(cross_entropy, feed_dict={inputAudio: inp, outActual: outp}))
+                     
+      
+      #print("cross_entropy = ",)
+      
+
+plt.plot(entrpy)
+plt.show(entrpy)
 
 
 
