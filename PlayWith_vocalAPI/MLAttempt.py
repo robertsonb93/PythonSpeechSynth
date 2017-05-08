@@ -6,10 +6,15 @@ import TextScraper as sc
 import TrainingDataGen as tdg
 import matplotlib.pyplot as plt
 import time
+import csv
 
+
+
+#********************************* DEFINITIONS************************************#
+#*********************************************************************************#
 def grabWindow(inputSize,audio,outputSize,param,offset):
     inOffset = offset * inputSize
-    outOffset = offset * outSize
+    outOffset = offset * (int)(outputSize/2)#So that we can still use the end as the next start.
     input = (audio[inOffset:inOffset+inputSize])
     output = (param[outOffset:outOffset+outputSize])
 
@@ -24,13 +29,27 @@ def vectorizeTraining(trainSet):
 
     return [audioOut,paramOut]
 
+def writeCSV():
+    return
+
 def weight_variable(shape):
   initial = tf.random_normal(shape, stddev=0.1)
   return tf.Variable(initial)
 
-def bias_variable(shape):
-  initial = tf.constant(0.1, shape=shape)
-  return tf.Variable(initial)
+#I hope this is correct, Review later if the phi is needed at eachs step or not.
+def forwardprop(X, W):
+
+    h    = tf.nn.sigmoid(tf.matmul(X, W[0]))  # The \sigma function
+    for w in W[1:len(W)-1]:
+        h = tf.nn.sigmoid(tf.matmul(h,w))
+
+    yhat = tf.matmul(h, W[len(W)-1])  # The \varphi function
+    return yhat
+
+
+
+#******************************END DEFINITIONS************************************#
+#*********************************************************************************#
 
 
 #the outputs from the learner are:
@@ -53,9 +72,10 @@ minLen = 0.0025 #if they all come out at min length it will be 10cm
 minFrames = 2
 maxFrames = 3
 frameRate = 4
+examples = 300
 
 #Produce the parameters we use for the generating speech.
-paramset = tdg.generateValues(spkr,10000,minFrames,maxFrames,frameRate,minLen,maxLen)
+paramset = tdg.generateValues(spkr,examples,minFrames,maxFrames,frameRate,minLen,maxLen)
 
 trainSet = list()
 count = 0
@@ -63,8 +83,9 @@ t_start = time.process_time()
 avg = 0
 for p in paramset:
     count = count +1
-    start = time.process_time()
+    start = time.process_time() 
     #Produce each parameter set into an audio file so we know the outcome of it.
+
     trainSet.append(tdg.generateAudio(p,spkr))
 
     t = time.process_time()-start
@@ -81,25 +102,33 @@ print("Total Training generation time = ",t_end-t_start)
 vtl.initSpeaker(spkr,False)
 [srate,tubecount,vtcount,glotcount] = vtl.getSpeakerConstants()
 inSize = trainSet[0].samplesPerFrame
+
 #Glottis + vtp + tubeLengths + incisor + velum
 outSize = (glotcount + vtcount + tubecount + 2) * 2#Times two for a start and end
-
-#Here we need to give it the training data. 
 [audio,params] = vectorizeTraining(trainSet)
 
+t_start = time.process_time()
 entrpy = list()
+W = list()
 with tf.Session() as sess:
 
     inputAudio = tf.placeholder(tf.float32,shape=[None,inSize])
     outActual = tf.placeholder(tf.float32,shape=[None,outSize])
 
     #create Weights (this is basically the network)
-    W = weight_variable((inSize,outSize))
-    b = bias_variable(outSize)
+    h_size = 256
+    W.append(weight_variable((inSize,h_size)))
+    for s in range(2):
+        W.append(weight_variable((h_size,h_size)))
+    W.append(weight_variable((h_size,outSize)))
 
-    outEstimate = tf.matmul(inputAudio,W) + b
+    #Forward propagation(How to calculate from input to output)
+    outEstimate = forwardprop(inputAudio, W)
+
+    #Back Progoation(How to correct the Error from the estimate)
     cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=outActual, logits=outEstimate))
-    train_step = tf.train.GradientDescentOptimizer(0.5).minimize(cross_entropy)
+    train_step = tf.train.GradientDescentOptimizer(0.01).minimize(cross_entropy)
+
     init = tf.global_variables_initializer()
     sess.run(init)
 
@@ -108,13 +137,12 @@ with tf.Session() as sess:
       inp = np.reshape(inp,(1,inSize))
       outp = np.reshape(outp,(1,outSize))
 
-      (sess.run(train_step, feed_dict={inputAudio: inp, outActual: outp}))
-      entrpy.append( sess.run(cross_entropy, feed_dict={inputAudio: inp, outActual: outp}))
+      sess.run(train_step, feed_dict={inputAudio: inp, outActual: outp})
+      entrpy.append(sess.run(cross_entropy, feed_dict={inputAudio: inp, outActual: outp}))
                      
       
-      #print("cross_entropy = ",)
-      
-
+t_end = time.process_time()
+print("Total Training Network time = ",t_end-t_start)
 plt.plot(entrpy)
 plt.show(entrpy)
 

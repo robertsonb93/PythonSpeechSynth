@@ -32,6 +32,7 @@ def genGlottis(NumStates,glottisCount,GlottisParams):
     ret = list()
     for n in range(NumStates):
         ret = ret + (rand.choice(glottisStates))
+    
     return ret
 
 #Instead of generating vocal tract parameters on our own,
@@ -143,7 +144,7 @@ def generateValues(spkr,count,minFrames,maxFrames,frameRate,minTube,maxTube):
         newParam = ParamSet()
         newParam.numFrames = numFrames[i]
         newParam.FPS = frameRates[i]
-        [newParam.incisor,newParam.tubeLengths] = genTubeLen(newParam.numFrames + 1,minTube,maxTube,tubeSectionCount)
+        [newParam.incisor,newParam.tubeLengths] = genTubeLen(newParam.numFrames,minTube,maxTube,tubeSectionCount)
         newParam.glottis = genGlottis(newParam.numFrames,glottisCount,GlottisParams)#This function tries to evenly distribute the states from the glottis
         newParam.vtp = list() #for some reason, it will keep building off the previous newParam .vtp if i
                               #dont do this.
