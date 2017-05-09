@@ -12,25 +12,63 @@ import csv
 
 #********************************* DEFINITIONS************************************#
 #*********************************************************************************#
-def grabWindow(inputSize,audio,outputSize,param,offset):
-    inOffset = offset * inputSize
-    outOffset = offset * (int)(outputSize/2)#So that we can still use the end as the next start.
-    input = (audio[inOffset:inOffset+inputSize])
-    output = (param[outOffset:outOffset+outputSize])
 
-    return [input,output]
 
-def vectorizeTraining(trainSet):
-    audioOut = list()
-    paramOut = list()
-    for t in trainSet:
-        paramOut = paramOut + t.glottis + t.vtp + t.tubeLengths + t.incisor + t.velum
-        audioOut = audioOut + t.audio
+def writeCSV(trainSet):
+    with open('Train.csv', 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile, delimiter=',',
+                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
+        for t in trainSet:
+            gltSize = int(len(t.glottis)/t.numFrames)
+            vSize = int(len(t.vtp)/t.numFrames)
+            tSize = int(len(t.tubeLengths)/t.numFrames)
+            #Incisor and velum are size numFrames
+            for n in range(t.numFrames-1):
+                glt = [str(g) for g in t.glottis[n*gltSize:(n+1)*gltSize]]
+                gltEnd = [str(g) for g in t.glottis[(n+1)*gltSize:(n+2)*gltSize]]
+                vtp = [str(v) for v in t.vtp[n*vSize:(n+1)*vSize]]
+                vtpEnd = [str(v) for v in t.vtp[(n+1)*vSize:(n+2)*vSize]]
+                tbel = [str(tl) for tl in t.tubeLengths[(n)*tSize:(n+1)*tSize]]
+                tbelEnd= [str(tl) for tl in t.tubeLengths[(n+1)*tSize:(n+2)*tSize]]
+                inc = [str(t.incisor[n])]
+                incEnd = [str(t.incisor[n+1])]
+                vel = [str(t.velum[n])]
+                velEnd = [str(t.velum[n+1])]
+                aud = [str(a) for a in t.audio[n*t.samplesPerFrame:(n+1)*t.samplesPerFrame]]
+                
+                row = glt + gltEnd + vtp + vtpEnd + tbel + tbelEnd + inc + incEnd + vel + velEnd + aud
+                writer.writerow(row)
+        print("Completed Writing Csv")
 
-    return [audioOut,paramOut]
 
-def writeCSV():
-    return
+def newTrainingData(examples,frameRate,numFrames,spkr):
+    maxLen = 0.005 #if they all come out at max length it will be 20cm
+    minLen = 0.0025 #if they all come out at min length it will be 10cm
+    minFrames = numFrames # min is 2 frames (start and end of an audio)
+    maxFrames = numFrames
+
+    #Produce the parameters we use for the generating speech.
+    paramset = tdg.generateValues(spkr,examples,minFrames,maxFrames,frameRate,minLen,maxLen)
+
+    trainSet = list()
+    count = 0
+    t_start = time.process_time()
+    avg = 0
+    for p in paramset:
+        count = count +1
+        start = time.process_time() 
+        #Produce each parameter set into an audio file so we know the outcome of it.
+
+        trainSet.append(tdg.generateAudio(p,spkr))
+
+        t = time.process_time()-start
+        avg = (t+ (count-1)*avg)/count
+        print("It took ",t, "to finish one synthesis. Estimated ",avg*(len(paramset)-count), " seconds remaining.")
+
+    t_end = time.process_time()
+    print("Total Training generation time = ",t_end-t_start)
+    writeCSV(trainSet)
+
 
 def weight_variable(shape):
   initial = tf.random_normal(shape, stddev=0.1)
@@ -67,50 +105,37 @@ def forwardprop(X, W):
 
 
 spkr ="test1.speaker"
-maxLen = 0.005 #if they all come out at max length it will be 20cm
-minLen = 0.0025 #if they all come out at min length it will be 10cm
-minFrames = 2
-maxFrames = 3
-frameRate = 4
-examples = 300
+framerate = 4
+numFrames = 3
 
-#Produce the parameters we use for the generating speech.
-paramset = tdg.generateValues(spkr,examples,minFrames,maxFrames,frameRate,minLen,maxLen)
+newTrainingData(10000,framerate,numFrames,spkr)
 
-trainSet = list()
-count = 0
-t_start = time.process_time()
-avg = 0
-for p in paramset:
-    count = count +1
-    start = time.process_time() 
-    #Produce each parameter set into an audio file so we know the outcome of it.
-
-    trainSet.append(tdg.generateAudio(p,spkr))
-
-    t = time.process_time()-start
-    avg = (t+ (count-1)*avg)/count
-    print("It took ",t, "to finish one synthesis. Estimated ",avg*(len(paramset)-count), " seconds remaining.")
-
-t_end = time.process_time()
-print("Total Training generation time = ",t_end-t_start)
-
-#for t in trainSet:
-#    plt.plot(t.audio)
-#    plt.show()
 #lets see if we can get it to match a single sound. with only a single frame transition of audio.
 vtl.initSpeaker(spkr,False)
 [srate,tubecount,vtcount,glotcount] = vtl.getSpeakerConstants()
-inSize = trainSet[0].samplesPerFrame
+inSize = int(srate/(framerate)) #I know this works with frameRate of 4
+#inSize = trainSet[0].samplesPerFrame
 
 #Glottis + vtp + tubeLengths + incisor + velum
 outSize = (glotcount + vtcount + tubecount + 2) * 2#Times two for a start and end
-[audio,params] = vectorizeTraining(trainSet)
+
+#Here We give TF a list of the files it can read to get our values from
+filename_queue = tf.train.string_input_producer(["Train.csv"])
+reader = tf.TextLineReader()
+key, value = reader.read(filename_queue)
+
+record_defaults = [[1.0] for x in range(outSize + inSize )]
+#Features are the last inSize columns(the audio)
+row = tf.decode_csv(value, record_defaults=record_defaults)
+audio = tf.stack(row[outSize:outSize+inSize])
+params = tf.stack(row[0:outSize])
 
 t_start = time.process_time()
 entrpy = list()
 W = list()
 with tf.Session() as sess:
+    coord = tf.train.Coordinator()
+    threads = tf.train.start_queue_runners(coord=coord)
 
     inputAudio = tf.placeholder(tf.float32,shape=[None,inSize])
     outActual = tf.placeholder(tf.float32,shape=[None,outSize])
@@ -129,16 +154,17 @@ with tf.Session() as sess:
     cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=outActual, logits=outEstimate))
     train_step = tf.train.GradientDescentOptimizer(0.01).minimize(cross_entropy)
 
+
     init = tf.global_variables_initializer()
     sess.run(init)
 
-    for i in range(len(trainSet)):
-      [inp,outp] = grabWindow(inSize,audio,outSize,params,(i))
-      inp = np.reshape(inp,(1,inSize))
-      outp = np.reshape(outp,(1,outSize))
+    for i in range(10):  #It seems this will stop on the min(number of lines or range)    
+        inp,outp = sess.run([audio,params])
+        outp = np.reshape(outp,(1,outSize))
+        inp = np.reshape(inp,(1,inSize))
 
-      sess.run(train_step, feed_dict={inputAudio: inp, outActual: outp})
-      entrpy.append(sess.run(cross_entropy, feed_dict={inputAudio: inp, outActual: outp}))
+        sess.run(train_step, feed_dict={inputAudio: inp, outActual: outp})
+        entrpy.append(sess.run(cross_entropy, feed_dict={inputAudio: inp, outActual: outp}))
                      
       
 t_end = time.process_time()

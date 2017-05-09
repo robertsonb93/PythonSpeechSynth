@@ -168,7 +168,7 @@ def generateAudio(param,spkr):
     [srate,tubeSecs,vParam,gParam] = vtl.getSpeakerConstants()
 
     [a_pre, samples, areas,articulators] = vtl.synthSpeech(param.vtp,param.glottis,tubeSecs,param.numFrames,param.FPS,srate)
-    samplesPerFrame = int(samples / param.numFrames)
+    samplesPerFrame = int(samples / (param.numFrames-1))
     param.samplesPerFrame = samplesPerFrame
     areas = [a / 100 for a in areas]
 
