@@ -70,18 +70,38 @@ def newTrainingData(examples,frameRate,numFrames,spkr):
     writeCSV(trainSet)
 
 
+def readFilesnBatch(files,epochs,batchSize,inSize,outSize):
+    #filename_queue = tf.train.string_input_producer(files,num_epochs = epochs,shuffle = True)
+    filename_queue = tf.train.string_input_producer(files)
+    reader = tf.TextLineReader()
+    key, value = reader.read(filename_queue)
+    record_defaults = [[1.0] for x in range(outSize + inSize )]
+
+    #Features are the last inSize columns(the audio)
+    row = tf.decode_csv(value, record_defaults=record_defaults)
+    audio = tf.stack(row[outSize:outSize+inSize])
+    params = tf.stack(row[0:outSize])
+
+    min_after_dequeue = 1000
+    capacity = min_after_dequeue+3 * batchSize
+    audioBatch,paramBatch = tf.train.shuffle_batch([audio,params],batch_size=batchSize,capacity=capacity,min_after_dequeue=min_after_dequeue)
+    return audio,params,audioBatch,paramBatch
+
 def weight_variable(shape):
   initial = tf.random_normal(shape, stddev=0.1)
   return tf.Variable(initial)
 
-#I hope this is correct, Review later if the phi is needed at eachs step or not.
+#I hope this is correct
+#Review how to properly build this
 def forwardprop(X, W):
 
-    h    = tf.nn.sigmoid(tf.matmul(X, W[0]))  # The \sigma function
+    h    = tf.nn.sigmoid(tf.matmul(X, W[0]))  
     for w in W[1:len(W)-1]:
         h = tf.nn.sigmoid(tf.matmul(h,w))
 
-    yhat = tf.matmul(h, W[len(W)-1])  # The \varphi function
+    #keepProb = tf.placeholder(tf.float32)
+   # drop = tf.nn.dropout(tf.matmul(h,W[len(W)-1]),keep_prob = keepProb) #This causes the cross-entropy to error
+    yhat = tf.matmul(h, W[len(W)-1]) 
     return yhat
 
 
@@ -108,7 +128,7 @@ spkr ="test1.speaker"
 framerate = 4
 numFrames = 3
 
-newTrainingData(10000,framerate,numFrames,spkr)
+#newTrainingData(10000,framerate,numFrames,spkr)
 
 #lets see if we can get it to match a single sound. with only a single frame transition of audio.
 vtl.initSpeaker(spkr,False)
@@ -120,20 +140,16 @@ inSize = int(srate/(framerate)) #I know this works with frameRate of 4
 outSize = (glotcount + vtcount + tubecount + 2) * 2#Times two for a start and end
 
 #Here We give TF a list of the files it can read to get our values from
-filename_queue = tf.train.string_input_producer(["Train.csv"])
-reader = tf.TextLineReader()
-key, value = reader.read(filename_queue)
 
-record_defaults = [[1.0] for x in range(outSize + inSize )]
-#Features are the last inSize columns(the audio)
-row = tf.decode_csv(value, record_defaults=record_defaults)
-audio = tf.stack(row[outSize:outSize+inSize])
-params = tf.stack(row[0:outSize])
+files = ["Train.csv"]
+audio,params,audioBatch,paramBatch= readFilesnBatch(files,4,10,inSize,outSize)  
 
 t_start = time.process_time()
 entrpy = list()
 W = list()
+
 with tf.Session() as sess:
+    print("Entered Session")
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(coord=coord)
 
@@ -143,7 +159,7 @@ with tf.Session() as sess:
     #create Weights (this is basically the network)
     h_size = 256
     W.append(weight_variable((inSize,h_size)))
-    for s in range(2):
+    for s in range(3):
         W.append(weight_variable((h_size,h_size)))
     W.append(weight_variable((h_size,outSize)))
 
@@ -151,26 +167,38 @@ with tf.Session() as sess:
     outEstimate = forwardprop(inputAudio, W)
 
     #Back Progoation(How to correct the Error from the estimate)
-    cross_entropy = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=outActual, logits=outEstimate))
-    train_step = tf.train.GradientDescentOptimizer(0.01).minimize(cross_entropy)
 
+    cross_entropy = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=outActual, logits=outEstimate))
+    train_step = tf.train.GradientDescentOptimizer(0.00001).minimize(cross_entropy)
 
     init = tf.global_variables_initializer()
     sess.run(init)
+    print("Session Init complete")
+    ACE = 0
+    ACEL = list()
+    epochs = 100
+    for i in range(epochs):  #It seems this will stop on the min(number of lines or range)
+        print(i," of ",epochs)
+           
 
-    for i in range(10):  #It seems this will stop on the min(number of lines or range)    
-        inp,outp = sess.run([audio,params])
-        outp = np.reshape(outp,(1,outSize))
-        inp = np.reshape(inp,(1,inSize))
+        x,y = sess.run([audioBatch,paramBatch])
+        _, CE = sess.run([train_step,cross_entropy], feed_dict={inputAudio: x, outActual: y})
 
-        sess.run(train_step, feed_dict={inputAudio: inp, outActual: outp})
-        entrpy.append(sess.run(cross_entropy, feed_dict={inputAudio: inp, outActual: outp}))
+        ACE = (CE + (i)*ACE)/(i+1)
+        ACEL.append(ACE)
+        print("Average Cross-Entropy: ",ACE)
+        entrpy.append(CE)
+        
+        
                      
-      
+    coord.request_stop()
+    coord.join(threads)
+
 t_end = time.process_time()
 print("Total Training Network time = ",t_end-t_start)
-plt.plot(entrpy)
-plt.show(entrpy)
+plt.plot(entrpy,'b')
+plt.plot(ACEL,'r')
+plt.show()
 
 
 
