@@ -99,8 +99,10 @@ def forwardprop(X, W):
     for w in W[1:len(W)-1]:
         h = tf.nn.sigmoid(tf.matmul(h,w))
 
-    #keepProb = tf.placeholder(tf.float32)
-   # drop = tf.nn.dropout(tf.matmul(h,W[len(W)-1]),keep_prob = keepProb) #This causes the cross-entropy to error
+    keepProb = tf.placeholder(tf.float32)
+    drop = tf.nn.dropout(tf.matmul(h,W[len(W)-1]),keep_prob = keepProb) #This causes the cost to error
+
+    #yhat = tf.matmul(h,drop)
     yhat = tf.matmul(h, W[len(W)-1]) 
     return yhat
 
@@ -142,12 +144,9 @@ outSize = (glotcount + vtcount + tubecount + 2) * 2#Times two for a start and en
 #Here We give TF a list of the files it can read to get our values from
 
 files = ["Train.csv"]
-audio,params,audioBatch,paramBatch= readFilesnBatch(files,4,10,inSize,outSize)  
+audio,params,audioBatch,paramBatch= readFilesnBatch(files,4,200,inSize,outSize)  
 
 t_start = time.process_time()
-entrpy = list()
-W = list()
-
 with tf.Session() as sess:
     print("Entered Session")
     coord = tf.train.Coordinator()
@@ -158,8 +157,9 @@ with tf.Session() as sess:
 
     #create Weights (this is basically the network)
     h_size = 256
+    W = list()
     W.append(weight_variable((inSize,h_size)))
-    for s in range(3):
+    for s in range(16):
         W.append(weight_variable((h_size,h_size)))
     W.append(weight_variable((h_size,outSize)))
 
@@ -167,27 +167,28 @@ with tf.Session() as sess:
     outEstimate = forwardprop(inputAudio, W)
 
     #Back Progoation(How to correct the Error from the estimate)
+    cost = tf.reduce_mean(tf.squared_difference(outActual,outEstimate))
+   # train_step = tf.train.GradientDescentOptimizer(1e-1).minimize(cost)
+    train_step = tf.train.AdamOptimizer(1).minimize(cost)
 
-    cross_entropy = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=outActual, logits=outEstimate))
-    train_step = tf.train.GradientDescentOptimizer(0.00001).minimize(cross_entropy)
 
     init = tf.global_variables_initializer()
     sess.run(init)
     print("Session Init complete")
-    ACE = 0
-    ACEL = list()
-    epochs = 100
+    AC = 0
+    ACL = list()
+    costList = list()
+    epochs = 1000
     for i in range(epochs):  #It seems this will stop on the min(number of lines or range)
         print(i," of ",epochs)
            
-
         x,y = sess.run([audioBatch,paramBatch])
-        _, CE = sess.run([train_step,cross_entropy], feed_dict={inputAudio: x, outActual: y})
+        _, Cst = sess.run([train_step,cost], feed_dict={inputAudio: x, outActual: y})
 
-        ACE = (CE + (i)*ACE)/(i+1)
-        ACEL.append(ACE)
-        print("Average Cross-Entropy: ",ACE)
-        entrpy.append(CE)
+        AC = (Cst + (i)*AC)/(i+1)
+        ACL.append(AC)
+        print("Average Cost: ",AC)
+        costList.append(Cst)
         
         
                      
@@ -196,8 +197,8 @@ with tf.Session() as sess:
 
 t_end = time.process_time()
 print("Total Training Network time = ",t_end-t_start)
-plt.plot(entrpy,'b')
-plt.plot(ACEL,'r')
+plt.plot(costList,'b')
+plt.plot(ACL,'r')
 plt.show()
 
 
