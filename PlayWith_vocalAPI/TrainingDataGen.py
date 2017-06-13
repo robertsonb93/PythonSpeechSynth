@@ -179,8 +179,6 @@ def generateAudio(param,spkr):
     articFrames = [articulators[x:x + tubeSecs] for x in range(0,len(articulators),tubeSecs)]
  
         #Pass each chunk into the AddToSynth
-        #To set the initial state, we need the first hand a blank audio and the
-        #first frame elements
     for i in range(param.numFrames):
         artics = ''.join(art for art in articFrames[i])
         artics = bytearray(map(ord,artics))
