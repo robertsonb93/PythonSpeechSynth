@@ -193,7 +193,7 @@ def getGlottisParams(numGlottisParams):
 # a boolean for printing messages on successfully grabbing the shapeName
 #Returns a list of the vocal tract parameters for a given shape
 #// ****************************************************************************
-#Notice VocalTractParameters and given shape, we need a shape name!n Check your uploaded speaker file!
+#Notice VocalTractParameters and given shape, we need a shape name Check your uploaded speaker file!
 def getVocalTractParamsfromShape(numVocalTractParams,shapeName,debugMsg):
     size = numVocalTractParams;
     sn = c_charp(shapeName.encode())
@@ -322,28 +322,32 @@ def resetSynthesis():
 #// The new glottis model state is given by the vector:
 #// o newGlottisParams
 #// ****************************************************************************
-def addToSynthesis(tubeLengthsList, tubeAreasList, articulatorsList, incisorGlottisDist_meters,
-                   velumArea_meters2, aspirationStrengthDecibles,newGlottis,audio):
+def addToSynthesis(tubeLengthsList, tubeAreasList, articulatorsList, incisorGlottisDist_cm,
+                   velumArea_cm2, aspirationStrengthDecibles,newGlottis,audio):
     numNS = c_int(len(audio))
     audio_c = (double * (len(audio)))(*audio)
 
     if(len(tubeLengthsList) != len(tubeAreasList)):
         print("MalFormed tube LengthList and Tube Area List in AddToSynthesis(), Check lengths")
 
-    tubeLengths = (double * (len(tubeLengthsList)))(*tubeLengthsList)
-    tubeAreas = (double * (len(tubeAreasList)))(*tubeAreasList)
+    #Converting from cm to meters
+    lengths_meters = [t/100 for t in tubeLengthsList]
+    areas_meters = [t/100 for t in tubeAreasList]
+
+    tubeLengths = (double * (len(tubeLengthsList)))(*lengths_meters)
+    tubeAreas = (double * (len(tubeAreasList)))(*areas_meters)
     articulators = (c_char * (len(articulatorsList)))(*articulatorsList)
-    incisorPos = double(incisorGlottisDist_meters)
-    velumOpen = double(velumArea_meters2)
+    incisorPos = double(incisorGlottisDist_cm / 100) 
+    velumOpen = double(velumArea_cm2 / 100)
     aStrengthdB = double(aspirationStrengthDecibles)
     newGlottisState = (double * (len(newGlottis)))(*newGlottis)
     
     TubeSynthesisAdd(numNS,audio_c,tubeLengths,tubeAreas,articulators,incisorPos,velumOpen,aStrengthdB,newGlottisState)
 
-    a_out = [audio[i] for i in range(audio_c._length_)]
+    a_out = [audio[i] for i in range(audio_c._length_)] #Todo, this makes it work but why instead of taking from audio_c? Compare the before and after of audio to see any differences, 
     return a_out
 
-#TThese are called WITHOUT ever calling initialize or close.
+#These are called WITHOUT ever calling initialize or close.
 def test1(speakerFile, audioList):
     speaker = speakerFile.encode('utf-8')
     numSamples = c_int(len(audioList))
