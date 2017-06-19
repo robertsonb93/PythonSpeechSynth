@@ -132,15 +132,19 @@ spkr ="test1.speaker"
 framerate = 4
 
 trainFiles = ["Train.csv","Train1.csv","Train2.csv","Train3.csv"]
+genData = False # <----------Generate new training data
 #USe this to generate new training data
-for f in trainFiles:
-    tdg.newTrainingData(10,framerate,spkr,f)
+if genData:
+    ExamplesPerFile = 1000
+    for f in trainFiles:
+        tdg.newTrainingData(ExamplesPerFile,framerate,spkr,f)
 
 
 #lets see if we can get it to match a single sound. with only a single frame transition of audio.
 vtl.initSpeaker(spkr,False)
 [srate,tubecount,vtcount,glotcount] = vtl.getSpeakerConstants()
 inSize = int(srate/(framerate)) #I know this works with frameRate of 4
+
 
 #Glottis + vtp + tubeLengths + incisor + velum + aspStrength
 outSize = (glotcount + vtcount + tubecount + 3) * 2#Times two for a start and end
@@ -159,12 +163,18 @@ with tf.Session() as sess:
     inputAudio = tf.placeholder(tf.float32,shape=[None,inSize],name = "inputAudio")
     outActual = tf.placeholder(tf.float32,shape=[None,outSize],name = "outActual")
 
+    difference = inSize - outSize
     #create Weights (this is basically the network)
-    h_size = inSize
+    h_size = difference
+
     W = list()
     W.append(weight_variable((inSize,h_size)))
     for s in range(5):
-        W.append(weight_variable((h_size,h_size)))
+        diff2 = difference
+        difference = (int)(difference / 2)
+        W.append(weight_variable((diff2,difference)))
+
+    h_size = difference
     W.append(weight_variable((h_size,outSize)))
 
     #Forward propagation(How to calculate from input to output)
@@ -181,7 +191,7 @@ with tf.Session() as sess:
     AC = 0
     ACL = list()
     costList = list()
-    epochs = 100000
+    epochs = 10
     x,y = sess.run([audioBatch,paramBatch])
     for i in range(epochs):  #It seems this will stop on the min(number of lines or range)
         print(i," of ",epochs)
@@ -205,21 +215,31 @@ with tf.Session() as sess:
             diff = list()
             for e in range(len(est)):
                 diff.append(act[e]-est[e])
-            plt.bar(range(len(diff)),diff)
+            indices = range(len(diff))
+            width = 0.8
+            indices2 = [i+0.25*width for i in indices]
+            indices3 = [i+0.25*width for i in indices2]
+
+            plt.bar(indices,act,width=width,color='b',label = "Actual Values")
+            plt.bar(indices2,est,width=0.5*width,color = 'r',label = "Regressed Values")
+            plt.bar(indices3,diff,width=0.25*width,color='g',label = "Cost")
+            plt.legend()
             plt.show()
                              
     t_end = time.process_time()
     print("Total Training Network time = ",t_end-t_start)
 
 #Open and split the test audio into even size chunks
-    #print("Writing and synthesizing audio")
-    #testAudio = openSplit('Mrgan_Free.wav', inSize)
-    #outAudio = list()
-    #for a in testAudio:
-    #    testParams = sess.run(outEstimate,feed_dict={inputAudio: np.array(a).reshape(1,inSize)})
-    #    outAudio += genAudio(testParams,inSize)
+    print("Writing and synthesizing audio")
+    testAudio = openSplit('Mrgan_Free.wav', inSize)
+    outAudio = list()
+    for a in testAudio:
+        testParams = sess.run(outEstimate,feed_dict={inputAudio: np.array(a).reshape(1,inSize)})
+        AudioLists = tdg.generateAudio(testParams,framerate,spkr)
+        for n in AudioLists:
+            outAudio.extend(n)
 
-    #vtl.list_to_wave('Mrgan_Free_out.wav',outAudio,2,srate)
+    vtl.list_to_wave('Mrgan_Free_out.wav',outAudio,2,srate)
 
     coord.request_stop()
     coord.join(threads)
