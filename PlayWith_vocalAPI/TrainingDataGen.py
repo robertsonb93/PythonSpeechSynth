@@ -20,6 +20,7 @@ def genGlottis(glottisCount,GlottisParams):
 #Instead of generating vocal tract parameters on our own, lets just use those(about 64) defined in the speaker file
 #Randomly choose one from the return of the speakers defined shapes
 #It should be noted, we can also consider getting the min,max for each vocaltract param via vtl.getTractParams(), then produce random values.
+#Last note is that the parameter [8] from the test1.speaker has all instances set to 0.0 for every sound.
 def genVTP(spkr,VTPsize):
     VocalShapes = sc.GetShapesfromSpeaker(spkr)  
     ret = list()
@@ -52,6 +53,9 @@ def genAspStr():
     return [rand.uniform(-40,0),rand.uniform(-40,0)]
 
 
+def genFrameRate():
+    return [rand.choice([1,2,3,5,6,7,8,9])]
+
 #Function will call appropriate functions to generate the lists that have the start and stop frame
 #for sound synthesis, the order of the parameters is
     #   glottis start, end
@@ -59,7 +63,8 @@ def genAspStr():
     #   Lengths for each tube in centimeters start and end
     #   Distance from the glottis to the incisors (front teeth) in centimeters start and end
     #   Then area in cm^2 of the velum start and end
-    #   The aspiration strength in dB 
+    #   The aspiration strength in dB
+    # framerate, how fast we will transition from the start to end state.
 def generateValues(spkr,sets,minTube,maxTube):
 
     vtl.initSpeaker(spkr,True)
@@ -78,6 +83,7 @@ def generateValues(spkr,sets,minTube,maxTube):
         retparams[c] += genTubeLen(minTube,maxTube,counts[1]) # This return tubes then incisor dist,
         retparams[c] += genVelum() #this returns start,end velum states
         retparams[c] += genAspStr() #A start,end aspiration strength
+        retparams[c] += genFrameRate() #single value of the framerate
 
     end = time.process_time()
     print("Generated ",sets," parameter sets in ", end - start, " seconds.")
@@ -93,7 +99,7 @@ def generateValues(spkr,sets,minTube,maxTube):
 #velumArea start,end
 #All values must be at the centimeter scale.
 #Will return a list of lists of the audio synthesized,
-def generateAudio(paramSets,frameRate,spkr):
+def generateAudio(paramSets,spkr):
     vtl.initSpeaker(spkr,False)
     [srate,tubeSecs,vParam,gParam] = vtl.getSpeakerConstants()
     numFrames = 2
@@ -111,6 +117,7 @@ def generateAudio(paramSets,frameRate,spkr):
         incWindow = numFrames + tubeWindow
         velWindow = numFrames+incWindow
         aspStrWindow = numFrames+velWindow
+        frameRatePos = aspStrWindow
 
         glottis = pSet[0:gltWindow]
         vtp = pSet[gltWindow:vWindow]
@@ -118,9 +125,11 @@ def generateAudio(paramSets,frameRate,spkr):
         incisors = pSet[tubeWindow:incWindow]
         velum = pSet[incWindow:velWindow]
         aspStr = pSet[velWindow:aspStrWindow]
+        framerate = pSet[frameRatePos]
+
 
         vtl.resetSynthesis()
-        [audioPre, audioSamplesCreated, tubeAreas, articulators] = vtl.synthSpeech(vtp,glottis,tubeSecs,numFrames,frameRate,srate)
+        [audioPre, audioSamplesCreated, tubeAreas, articulators] = vtl.synthSpeech(vtp,glottis,tubeSecs,numFrames,framerate,srate)
         #we need to convert the artics in the a different format, so we can pass them to addToSynthesis
         artics = bytearray(map(ord,''.join(art for art in articulators)))
         #Since addToSynthesis interpolates between the current frame (or default starting) and the provided next frame, 
@@ -171,15 +180,15 @@ def writeCSV(trainSets,audioSets,filename):
 
 
 #The number of desired examples
-#the framerate of the speaker(how fast they talk, i am working with 4-8 per second)
+#the framerate of the speaker(how fast they talk, i am working with 1-9 per second)
 #the speaker file to be used, (see .speaker files)
 #the name of the file the data should be written too.
-def newTrainingData(examples,frameRate,spkr,outputFile):
-    maxLen = 5 #if they all come out at max length it will be 20cm
-    minLen = 2.5 #if they all come out at min length it will be 10cm
+def newTrainingData(examples,spkr,outputFile):
+    maxLen = 0.5 #if they all come out at max length it will be 20cm
+    minLen = 0.25 #if they all come out at min length it will be 10cm
     
     #Produce the parameters we use for the generating speech.
     #This is a list of lists where each sublist is the parameters needed to produce an audio
     paramSets = generateValues(spkr,examples,minLen,maxLen)
-    audioSets = generateAudio(paramSets,frameRate,spkr)
+    audioSets = generateAudio(paramSets,spkr)
     writeCSV(paramSets,audioSets,outputFile)

@@ -33,6 +33,9 @@
     <Compile Include="TrainingDataGen.py">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="TrainingDataRevamp.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="vtlPythonAPI.py" />
   </ItemGroup>
   <PropertyGroup>

@@ -65,10 +65,28 @@ GesToWav.argtype = [c_char,c_char,c_char,c_char]
 
 def wav_to_list(filename):
     w = wave.open(filename,'r')
-    aud = [float(n) for n in w.readframes(w.getnframes())]
+    aud = [(n) for n in w.readframes(w.getnframes())]
+    #This returns something offset by +(n/2) and is n bits.
+    # we will normalize it to be -1,1
+
+    #This provides us with a depth of 2,, yet for some reason all the values max at 255, depth of 1.
+    depth = w.getsampwidth()-1
+    depth = 2 ** (int(depth*8)-1)
+
+    min = 0
+    max = depth
+    for i in range(len(aud)):
+        if aud[i] > 255:
+            print("vtl.wav_toList::greater then 255 in audio: ",aud[i])
+
+        if aud[i] < 0:
+            print(" vtl.wav_to_list::Less then 0 in audio: ",aud[i])
+        aud[i] = (aud[i] - min) / (max - min)
+        
     w.close()
     return aud
 
+#Note Byte rate not, bit, so for 16-bit audio use byterate of 2.
 def list_to_wave(filename,audio,byteRate,sampleRate):
     depth = 2 ** (int(byteRate*8)-1)
     depth = depth -1
@@ -87,10 +105,10 @@ def list_to_wave(filename,audio,byteRate,sampleRate):
             if a > 1:
                 a = 1
                 countPos = countPos + 1
-    
        
         w.writeframesraw( struct.pack('<h', int((a*depth) )))
-    print("countNeg = ",countNeg,"\ncountPos = " ,countPos)
+
+    print("Negative out of range audio = ",countNeg,"\nPsoitive out of range audio = " ,countPos)
     w.close()
 
 def initSpeaker(SpeakerFile,debugMsg):
