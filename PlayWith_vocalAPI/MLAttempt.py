@@ -24,15 +24,32 @@ def readFilesnBatch(files,batchSize,inSize,outSize):
 
     #Features are the last inSize columns(the audio)
     row = tf.decode_csv(value, record_defaults=record_defaults)
+
     params = tf.stack(row[:outSize])
     audio = tf.stack(row[outSize:])
 
+    stops = tf.placeholder(tf.int32,shape = [None], name = "StopPoints_List")
+    max = tf.constant([22050],tf.int32,name = 'Max_audioSize')#Todo Deal with the magive 22050, where do we get this value from? 
 
+    #We need to grab the size of audio here, that way we have the approriate stop point for the audio in the sequence.
+    size = tf.expand_dims(tf.size(audio),0,name = 'increase_size_of_size(audio)_for_concat')
+    stops = tf.concat([stops,size],0,name = 'Concat_stop_points')#We could also look at setting stops.shape = batchsize, and then using scatter_update
+
+     
+    #Then perform padding on it
+    padSize = tf.subtract(max,tf.size(audio),name = 'Padsize_SubtractCalc')
+    padding = tf.fill(padSize,0.0,name = 'FillAudioPadding')
+    padAudio = tf.concat([audio,padding],0,name= 'AudioPaddingConcat')
+    print(tf.rank(padAudio,name = 'PadAudioRank'))
+    padAudio = tf.reshape(padAudio,max,name = 'Reshaping_paddedAudio') #Todo:Make sure that we are actually padding things here correctly. Is it being padded with Zeros to 22050?
+
+
+    #then feed to the batch
     min_after_dequeue = 1000
     capacity = min_after_dequeue+3 * batchSize
-    audioBatch,paramBatch = tf.train.shuffle_batch([audio,params],batch_size=batchSize,capacity=capacity,min_after_dequeue=min_after_dequeue,allow_smaller_final_batch=True)
+    audioBatch,paramBatch = tf.train.shuffle_batch([padAudio,params],batch_size=batchSize,capacity=capacity,min_after_dequeue=min_after_dequeue,allow_smaller_final_batch=True)
    # audioBatch,paramBatch = tf.train.batch([audio,params],batch_size=batchSize,capacity = capacity,allow_smaller_final_batch=True,dynamic_pad=True)
-    return audio,params,audioBatch,paramBatch
+    return stops,audioBatch,paramBatch
 
 #Given a audiofile name, and the number of samples to split the audio up into, will
 #Pad the audio with trailing zeros and split into sections of size inSize
@@ -239,8 +256,6 @@ postfix = ".csv"
 prefix = "Train"
 for i in range(392,400):
     trainFiles.append( (prefix + str(i) + postfix))
-
-
 genData = False # <----------Generate new training data
 if genData:
     ExamplesPerFile = 1000
@@ -251,7 +266,10 @@ if genData:
 #lets see if we can get it to match a single sound. with only a single frame transition of audio.
 vtl.initSpeaker(spkr,False)
 [srate,tubecount,vtcount,glotcount] = vtl.getSpeakerConstants()
-inSize = int(srate/(framerate)) #I know this works with frameRate of 4 and 1 
+inSize = int(srate/(framerate)) #I know this works with frameRate of 4 and 1
+max_steps = int(srate)
+seq_width = 1
+ 
 
 
 #Glottis + vtp + tubeLengths + incisor + velum + aspStrength
@@ -275,8 +293,9 @@ for i in range(trainStart,trainEnd): #using files 50-299 as they they are curren
 for i in range(testStart,testEnd):
       testFiles.append((prefix+str(i)+postfix))
 
-_,_,audioBatch,paramBatch= readFilesnBatch(trainFiles,maxBatchSz,inSize,outSize)
-_,_,testAudioBattch,testParamBatch = readFilesnBatch(testFiles,maxTestBatchSz,inSize,outSize)
+
+stops,audioBatch,paramBatch= readFilesnBatch(trainFiles,maxBatchSz,inSize,outSize)
+testStops,testAudioBattch,testParamBatch = readFilesnBatch(testFiles,maxTestBatchSz,inSize,outSize)
 
 print("Batching complete")
 
@@ -291,7 +310,7 @@ with tf.Session() as sess:
     threads = tf.train.start_queue_runners(coord=coord)
     
     with tf.name_scope("Input_Audio"):
-        inputAudio = tf.placeholder(tf.float32,shape=[None,inSize],name = "inputAudio")
+        inputAudio = tf.placeholder(tf.float32,shape=[None,inSize],name = "inputAudio") #Todo:change 
         trainSummaries.append(tf.summary.audio("Input_Audio",inputAudio,srate,10))
     with tf.name_scope("Actual_output"):
         outActual = tf.placeholder(tf.float32,shape=[None,outSize],name = "outActual")       
@@ -376,6 +395,13 @@ with tf.Session() as sess:
         if (i%testFreq):
             x,y,currBatchSize = sess.run([audioBatch,paramBatch,tf.shape(paramBatch)[0]])# here we are assigning batchsize components to the None Dimension for the x,y
             normalizeOut(y,currBatchSize,tubecount,vtcount,glotcount)
+            def getStopPoints(x):
+                stops = list()
+                for sample in x:
+                    stops.append(len(sample))
+                return np.array(stops).reshape(1,len(stops))
+            stops = getStopPoints(x)
+
 
             if i <1: #This is here to push the initial cost into the cost list, then it can be summarized into the tensor below
                 Cst = sess.run(cost,feed_dict={inputAudio: x, outActual: y})
