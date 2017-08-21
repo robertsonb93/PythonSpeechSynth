@@ -5,15 +5,13 @@ import csv
 
 postfix = ".csv"
 prefix = "Train"
-for i in range(49,300):
+for i in range(0,400):
     print(i)
     newRowsList = list()
     with open((prefix+str(i)+postfix),'rt',encoding = 'utf-8') as f:
         reader = csv.reader(f)#Open the csv
         for row in reader:
-            newRow = row[0:146]
-            newRow.append(4)
-            newRow += row[146:len(row)]
+            newRow = row[:] + [0 for _ in range(22197 - len(row))]
             newRowsList.append(newRow)
 
 
@@ -23,7 +21,8 @@ for i in range(49,300):
         for r in newRowsList:
             write.writerow(r)
         
+             
 
 
 
-
+                                                
