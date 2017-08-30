@@ -40,10 +40,8 @@ def createBatch(batchSize,key,params,audio,initState,unroll,num_enqueue_threads 
     sequence = {"audio":audio}
     context = {"params":params}
 
-    state_size = 1
-    initial_state_values = tf.zeros((state_size,), dtype=tf.float32)#When I tried removing this and creating with initState instead, this would cause our GenRNN to break, TODO FIGURE OUT
-    initial_states = {"lstm_state": initial_state_values}
-    capacity = batchSize * num_enqueue_threads * 2 #TODO: Evaluate this and decide if its appropriate
+    initial_states = initState
+    capacity = batchSize * num_enqueue_threads * 20 #TODO: Evaluate this and decide if its appropriate
 
     batch = tf.contrib.training.batch_sequences_with_states(
         input_key=key,
@@ -79,7 +77,7 @@ def seqLen_input_output(paramBatch,audioBatch,unroll,maxBatchSz,srate,outSize):
 
     with tf.name_scope("Actual_output"):
         print("Building output-Placeholder")
-        outActual = tf.placeholder(tf.float32,shape=[None,outSize],name = "outActual")#TODO: Need to feed it paramBatch? 
+        outActual = tf.placeholder(tf.float32, shape=[None,outSize],name = "outActual")#TODO: Need to feed it paramBatch? 
 
     return stops,inputAudio,outActual
 
@@ -87,8 +85,11 @@ def seqLen_input_output(paramBatch,audioBatch,unroll,maxBatchSz,srate,outSize):
 def GenRNNCells(maxBatchSz,cellWidth, cellLayers=1):
     #create out RNN cells
     print("Creating RNN Cells")
-    LSTMStack = tf.contrib.rnn.MultiRNNCell([tf.contrib.rnn.BasicLSTMCell(cellWidth) for _ in range(cellLayers)])
-    initStates = LSTMStack.zero_state(maxBatchSz, tf.float32)
+    LSTMStack = tf.contrib.rnn.MultiRNNCell([tf.contrib.rnn.BasicLSTMCell(cellWidth) for _ in range(cellLayers)]) #TODO: WORk this back in?
+
+    initState_values = tf.zeros((cellWidth),dtype = tf.float32) #TODO: this wiull probably need some reworking to work with cellLAyers
+    initStates = {"lstm_state":initState_values}
+
     print("RNN Cells Built")
 
     #TODO: Generate our state_names in here as well?
@@ -106,13 +107,16 @@ def genRNN(cell,input,batch,stops):
         state_saver=batch,
         sequence_length = stops,
         state_name=("lstm_state","lstm_state"))
+        #state_name = "lstm_state"
 
 
-    val = tf.transpose(rnnOut,[1,0,2])
-    last = tf.gather(val, int(val.get_shape()[0]) - 1)
+    #val = tf.transpose(rnnOut,[1,0,2])
+    #last = tf.gather(val, int(val.get_shape()[1]) - 1)#Todo: I believe we are collecting the wrong values here, and its creating out output to be [unroll,params] instead of [batch,params]
+
+    last = rnnOut[len(rnnOut)-1]#We collect the states from the last time series?
     print("Completed Building RNN")
     
-    return last
+    return last#Todo: remove val and rnnOut, it is for debugging
 
 #Given a audiofile name, and the number of samples to split the audio up into, will
 #Pad the audio with trailing zeros and split into sections of size inSize
@@ -294,10 +298,13 @@ def denormalizeOut(batch,batchSz,tubeCount,VTPCount,glotcount):
 
 
 
-
+#*********************************************************************************#
+#*********************************************************************************#
+#*********************************************************************************#
 #******************************END DEFINITIONS************************************#
 #*********************************************************************************#
-
+#*********************************************************************************#
+#*********************************************************************************#
 
 #the outputs from the learner are:
 
@@ -339,7 +346,7 @@ outSize +=1 #For framerate
 
     #Here We give TF a list of the files it can read to get our values from, 
     #the proceed to organize them into batches that are sent to TF
-maxBatchSz = 25
+maxBatchSz = 100
 maxTestBatchSz = 100
 trainFiles = list() #Select which files we want to train off of
 testFiles= list()
@@ -354,12 +361,6 @@ for i in range(testStart,testEnd):
       testFiles.append((prefix+str(i)+postfix))
 
 
-#batch,audioBatch,paramBatch = readFilesnBatch(trainFiles,maxBatchSz,inSize,outSize)
-#tBatch,testAudioBatch,testParamBatch = readFilesnBatch(testFiles,maxTestBatchSz,inSize,outSize)
-#print("Batching complete")
-
-  
-
 t_start = time.process_time()
 with tf.Session() as sess:
     print("Entered Session")
@@ -367,9 +368,10 @@ with tf.Session() as sess:
     trainSummaries = list()
     testSummaries = list()
 
+
     #Use this to dtermine how wide and how many layers our RNN should be
     cellDepth = 1
-    cellWidth = 1
+    cellWidth = 147*2
     cell,initState = GenRNNCells(maxBatchSz,cellWidth,cellDepth) #cell will goto the rnn, initState will goto createBatch
 
     miniSequenceSize = 150
@@ -377,7 +379,7 @@ with tf.Session() as sess:
     key,params,audio = readFiles(trainFiles,inSize,outSize)
 
     #Create a state saving batch from our input & output we read from files
-    batch = createBatch(maxBatchSz,key,params,audio,initState,miniSequenceSize)
+    batch = createBatch(maxBatchSz,key,params,audio,initState,miniSequenceSize,10)
 
     #Format and gather our sequence lengths, inputs, and output placeholder
     stops, input, outActual = seqLen_input_output(batch.context["params"],batch.sequences["audio"],miniSequenceSize,maxBatchSz,srate,outSize)
@@ -385,13 +387,11 @@ with tf.Session() as sess:
     #create the rnn
     rnnOut = genRNN(cell,input,batch,stops)
 
-    coord = tf.train.Coordinator()
-    threads = tf.train.start_queue_runners(coord=coord)
-
     #create Weights
+
     networkDepth = 20
     print("Creating Weights")
-    h_size = 10
+    h_size = 147*2
     W = list()
     W.append(weight_variable((cellWidth,h_size)))  
     for s in range(networkDepth):
@@ -403,13 +403,13 @@ with tf.Session() as sess:
     with tf.name_scope("Generated_Output"):
        
         outEstimate,sumry = forwardprop(rnnOut, W)
-        #trainSummaries.append(sumry)
-        #testSummaries.append(sumry)
+        trainSummaries.append(sumry)
+        testSummaries.append(sumry)
 
     print("Forwardprop set")
 
-    #trainSummaries.append(tf.summary.histogram("NetworkOutput_Train",outEstimate))
-    #testSummaries.append(tf.summary.histogram("NetworkOutput_Test",outEstimate))
+    trainSummaries.append(tf.summary.histogram("NetworkOutput_Train",outEstimate))
+    testSummaries.append(tf.summary.histogram("NetworkOutput_Test",outEstimate))
 
 
     #BackPropogation(How to correct the Error from the estimate)
@@ -419,8 +419,8 @@ with tf.Session() as sess:
         cost =tf.reduce_mean(costSplit)#Back prop is here 
         costListTensor = tf.placeholder(tf.float32,[None],name = "Cost_History")
         variable_summary(costListTensor)
-        #trainSummaries.append(tf.summary.scalar("cost_while_training",cost))
-        #testSummaries.append(tf.summary.scalar("cost_while_testing",cost))
+        trainSummaries.append(tf.summary.scalar("cost_while_training",cost))
+        testSummaries.append(tf.summary.scalar("cost_while_testing",cost))
     print("Completed Cost")
 
 
@@ -429,15 +429,17 @@ with tf.Session() as sess:
         train_step = tf.train.AdamOptimizer(learningRate).minimize(cost)
     print("Completed Optimizer")
  
-    epochs = 10
+    epochs = 1000
     testFreq = 100
 
-    #trainSumry = tf.summary.merge(trainSummaries)
-    #testSumry = tf.summary.merge(testSummaries)
-    #writer = tf.summary.FileWriter('.\TensorBoard',sess.graph,filename_suffix = "Run1")
+    trainSumry = tf.summary.merge(trainSummaries)
+    testSumry = tf.summary.merge(testSummaries)
+    writer = tf.summary.FileWriter('.\TensorBoard',sess.graph,filename_suffix = "Run1")
     #saver = tf.train.Saver()
-    #print("Completed Summaries")
+    print("Completed Summaries")
 
+    coord = tf.train.Coordinator()
+    threads = tf.train.start_queue_runners(coord=coord)
     sess.run(tf.local_variables_initializer())#TODO: do we need both of these intializations?
     init = tf.global_variables_initializer()
     sess.run(init)   
@@ -446,22 +448,27 @@ with tf.Session() as sess:
     for i in range(epochs):
         print(i," of ",epochs)       
 
-        if (i%testFreq):
-            x,y,currBatchSize = sess.run([audioBatch,paramBatch,tf.shape(paramBatch)[0]])# here we are assigning batchsize components to the None Dimension for the x,y
-            normalizeOut(y,currBatchSize,tubecount,vtcount,glotcount)
+        #if (i%testFreq):
+        if (True):
+            y = sess.run(batch.context["params"])
+           # normalizeOut(y,maxBatchSz,tubecount,vtcount,glotcount)
+
+            #We need to grab some training batch audio, and the same for training params
 
             if i <1: #This is here to push the initial cost into the cost list, then it can be summarized into the tensor below
-                Cst = sess.run(cost,feed_dict={inputAudio: x, outActual: y})
+                Cst = sess.run(cost,feed_dict={outActual: y})
                 costList[0] = Cst
                     
             sessList = [costSplit, cost, train_step, trainSumry]
+            #sessList = [costSplit,cost,train_step]
             CstSplit,Cst,_,sumry = sess.run(sessList, 
                                           feed_dict={outActual: y, costListTensor: costList},
                                           options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE),
                                           run_metadata=tf.RunMetadata()
                                           )
             costList[i%10] = Cst
-        else:
+            print("current cost: " + str(Cst))
+        #else:
           #  xTest,yTest = sess.run([testAudioBatch,testParamBatch])
           #  normalizeOut(yTest,maxTestBatchSz,tubecount,vtcount,glotcount)
           ##  sessList = [cost,testSumry]
@@ -469,7 +476,7 @@ with tf.Session() as sess:
           #  Cst,sumry = sess.run(sessList,feed_dict = {outActual: yTest})
           #  ##saver.save(sess,'.\TensorBoard\checkpoints',global_step= i)
 
-        writer.add_summary(sumry,i)
+            writer.add_summary(sumry,i)
                            
         #TODO: Create a better test where we generate the audio and then can compare it to the inputAudio, perhaps every 1000 steps
                              
