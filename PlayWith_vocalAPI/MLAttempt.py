@@ -34,14 +34,65 @@ def readFiles(files,inSize,outSize):
     return key,params,audio
 
 #Creates a special batch that allow us to splits our audio sequences into smaller sequences to be fed to our RNN
+#First lets create a shuffle_batch from our input Data
+#Then lets feed it to our special sequence saving batch
 def createBatch(batchSize,key,params,audio,initState,unroll,num_enqueue_threads = 3):
 
     print("Creating Batch")
-    sequence = {"audio":audio}
-    context = {"params":params}
+   
+
+    min_dequeue = 1000
+    capacity = min_dequeue + (batchSize * num_enqueue_threads * 1)
+    
+    #TrainingData
+    trainA_batch,trainP_batch = shuffle_batch(
+    [audio[0],params[0]],
+    batch_size=batchSize,
+    capacity = capacity,
+    min_after_dequeue = min_dequeue,
+    num_threads=num_enqueue_threads,
+    seed=None,
+    enqueue_many=False,
+    shapes=None,
+    allow_smaller_final_batch=True,
+    shared_name=None,
+    name="TrainShuffleBatch"
+    )
+
+    #TestingData
+    testA_batch,testP_batch = shuffle_batch(
+    [audio[0],params[0]],
+    batch_size=batchSize,
+    capacity = capacity,
+    min_after_dequeue = min_dequeue,
+    num_threads=num_enqueue_threads,
+    seed=None,
+    enqueue_many=False,
+    shapes=None,
+    allow_smaller_final_batch=True,
+    shared_name=None,
+    name="TestShuffleBatch"
+    )
+
+
+
+    #SequenceBatch
+
+    sequences = {"audio":trainA_batch , "testAudio": testA_batch}
+    context = {"params":trainP_batch , "testParams":testP_batch}
+
+    stateful_reader = tf.SequenceQueueingStateSaver(
+    batch_size, 
+    num_unroll,
+    length=length, 
+    input_key=key,
+    input_sequences=sequences,
+    input_context=context, 
+    initial_states=initial_states,
+    capacity=batch_size*100)
 
     initial_states = initState
-    capacity = batchSize * num_enqueue_threads * 20 #TODO: Evaluate this and decide if its appropriate
+    capacity = batchSize * num_enqueue_threads * 1 #TODO: Evaluate this and decide if its appropriate, IT APPEARS THIS WILL decide how many epochs we do as num_threads * 30
 
     batch = tf.contrib.training.batch_sequences_with_states(
         input_key=key,
@@ -51,12 +102,9 @@ def createBatch(batchSize,key,params,audio,initState,unroll,num_enqueue_threads 
         num_unroll=unroll,
         batch_size=batchSize,
         num_threads=num_enqueue_threads,
-        input_length = tf.size(params,name = "ParamsSize_createBatch"),
+        input_length = tf.size(params,name = "ParamsSize_createBatch"),#is this correct for input_length? I think it needs to be sequence length instead
         capacity=capacity
         )
-    #audioBatch = batch.sequences["audio"]
-    #paramBatch = batch.context["params"]
-
     print("Completed Creating Batch")
     return batch
 
@@ -65,19 +113,17 @@ def seqLen_input_output(paramBatch,audioBatch,unroll,maxBatchSz,srate,outSize):
     with tf.name_scope("SequenceLengths"):
         print("Creating Sequence Length Stop Point List")
         stops = [tf.cast(tf.ceil(tf.divide(srate,pb[0][146])),dtype = tf.int32) for pb in tf.split(paramBatch,maxBatchSz,0)]
-        #for s in stops:
-        #    print(sess.run(s)) #Put here for testing purposes # TODO: why are we getting 11 elements in stops??
 
     with tf.name_scope("Input_Audio"):
         seq_width = 1 #TODO:Determine if this value is needed, and if it should be defined outside the function
         #input is a list, where each n-th element is the n'th time step for an entire batch. 
         print("building Reshaped input")
-        inputAudio = [tf.reshape(i,[maxBatchSz,seq_width]) for i in tf.split(audioBatch,unroll,1)] #Todo This needs to be the same as the unroll for the audioBatch
+        inputAudio = [tf.reshape(i,[maxBatchSz,seq_width]) for i in tf.split(audioBatch,unroll,1)]
         print("Input is built")
 
     with tf.name_scope("Actual_output"):
         print("Building output-Placeholder")
-        outActual = tf.placeholder(tf.float32, shape=[None,outSize],name = "outActual")#TODO: Need to feed it paramBatch? 
+        outActual = tf.placeholder(tf.float32, shape=[None,outSize],name = "outActual")
 
     return stops,inputAudio,outActual
 
@@ -100,6 +146,7 @@ def GenRNNCells(maxBatchSz,cellWidth, cellLayers=1):
 def genRNN(cell,input,batch,stops):
     print("Building RNN")
 
+    #tf.placeholder(tf.float32,shape =tf.shape(batch),name = "input_Placeholder")
     #TODO: how to use for a tester as well? use a feed to placeholder? PErhaps make it apart of creating the batch
     rnnOut,states = tf.contrib.rnn.static_state_saving_rnn(
         cell,
@@ -108,7 +155,6 @@ def genRNN(cell,input,batch,stops):
         sequence_length = stops,
         state_name=("lstm_state","lstm_state"))
         #state_name = "lstm_state"
-
 
     #val = tf.transpose(rnnOut,[1,0,2])
     #last = tf.gather(val, int(val.get_shape()[1]) - 1)#Todo: I believe we are collecting the wrong values here, and its creating out output to be [unroll,params] instead of [batch,params]
@@ -376,14 +422,25 @@ with tf.Session() as sess:
 
     miniSequenceSize = 150
     #Read a list of CSV files, and prepare our outputs and inputs
-    key,params,audio = readFiles(trainFiles,inSize,outSize)
-
+    params = list()
+    audio = list()
+    key,p,a = readFiles(trainFiles,inSize,outSize)#These are  train
+    params.append(p)
+    audio.append(a)
+    key2,p,a = readFiles(testFiles,inSize,outSize)#these are  test
+    params.append(p)
+    audio.append(a)
+    key += key2
     #Create a state saving batch from our input & output we read from files
     batch = createBatch(maxBatchSz,key,params,audio,initState,miniSequenceSize,10)
 
+    #Lets feed these with the batch.context, and batch.sequence
+    inputHolder = tf.placeholder(tf.float32,shape = [None,miniSequenceSize],name = "inputPlaceHolder")
+    outputHolder = tf.placeholder(tf.float32,shape = [None,outSize],name = "outputPlaceHolder")
+
     #Format and gather our sequence lengths, inputs, and output placeholder
-    stops, input, outActual = seqLen_input_output(batch.context["params"],batch.sequences["audio"],miniSequenceSize,maxBatchSz,srate,outSize)
- 
+    stops, input, outActual = seqLen_input_output(outputHolder,inputHolder,miniSequenceSize,maxBatchSz,srate,outSize)
+    
     #create the rnn
     rnnOut = genRNN(cell,input,batch,stops)
 
@@ -430,7 +487,7 @@ with tf.Session() as sess:
     print("Completed Optimizer")
  
     epochs = 1000
-    testFreq = 100
+    testFreq = 5
 
     trainSumry = tf.summary.merge(trainSummaries)
     testSumry = tf.summary.merge(testSummaries)
@@ -448,34 +505,35 @@ with tf.Session() as sess:
     for i in range(epochs):
         print(i," of ",epochs)       
 
-        #if (i%testFreq):
-        if (True):
-            y = sess.run(batch.context["params"])
-           # normalizeOut(y,maxBatchSz,tubecount,vtcount,glotcount)
-
-            #We need to grab some training batch audio, and the same for training params
+        if (i%testFreq):       
+            
+            y,inpHldr = sess.run([batch.context["params"],batch.sequences["audio"]])
+            normalizeOut(y,maxBatchSz,tubecount,vtcount,glotcount)
 
             if i <1: #This is here to push the initial cost into the cost list, then it can be summarized into the tensor below
-                Cst = sess.run(cost,feed_dict={outActual: y})
+                feed = {outActual: y,outputHolder:y, inputHolder: inpHldr}
+                Cst = sess.run(cost,feed_dict=feed)
                 costList[0] = Cst
                     
+            feed = {outActual: y,outputHolder:y, inputHolder:inpHldr, costListTensor: costList}
             sessList = [costSplit, cost, train_step, trainSumry]
             #sessList = [costSplit,cost,train_step]
             CstSplit,Cst,_,sumry = sess.run(sessList, 
-                                          feed_dict={outActual: y, costListTensor: costList},
+                                          feed_dict=feed,
                                           options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE),
                                           run_metadata=tf.RunMetadata()
                                           )
             costList[i%10] = Cst
             print("current cost: " + str(Cst))
-        #else:
-          #  xTest,yTest = sess.run([testAudioBatch,testParamBatch])
-          #  normalizeOut(yTest,maxTestBatchSz,tubecount,vtcount,glotcount)
-          ##  sessList = [cost,testSumry]
-          #  sessList = [cost]
-          #  Cst,sumry = sess.run(sessList,feed_dict = {outActual: yTest})
-          #  ##saver.save(sess,'.\TensorBoard\checkpoints',global_step= i)
+        else:
+            yTest,inpHldr = sess.run([batch.context["testParams"],batch.sequences["testAudio"]])
+            normalizeOut(yTest,maxTestBatchSz,tubecount,vtcount,glotcount) #I think for now we have to keep testbatch and training batch size the same
+         
+            sessList = [cost,testSumry]
+            feed = {outActual:yTest,outputHolder: yTest, inputHolder:inpHldr}
+            Cst,sumry = sess.run(sessList,feed_dict = feed)
 
+          #  ##saver.save(sess,'.\TensorBoard\checkpoints',global_step= i)
             writer.add_summary(sumry,i)
                            
         #TODO: Create a better test where we generate the audio and then can compare it to the inputAudio, perhaps every 1000 steps
