@@ -44,67 +44,76 @@ def createBatch(batchSize,key,params,audio,initState,unroll,num_enqueue_threads 
     min_dequeue = 1000
     capacity = min_dequeue + (batchSize * num_enqueue_threads * 1)
     
-    #TrainingData
-    trainA_batch,trainP_batch = shuffle_batch(
-    [audio[0],params[0]],
-    batch_size=batchSize,
-    capacity = capacity,
-    min_after_dequeue = min_dequeue,
-    num_threads=num_enqueue_threads,
-    seed=None,
-    enqueue_many=False,
-    shapes=None,
-    allow_smaller_final_batch=True,
-    shared_name=None,
-    name="TrainShuffleBatch"
-    )
+    ##TrainingData
+    #trainA_batch,trainP_batch = tf.train.shuffle_batch(
+    #[audio[0],params[0]],
+    #batch_size=batchSize,
+    #capacity = capacity,
+    #min_after_dequeue = min_dequeue,
+    #num_threads=num_enqueue_threads,
+    #seed=None,
+    #enqueue_many=False,
+    #shapes=None,
+    #allow_smaller_final_batch=False,
+    #shared_name=None,
+    #name="TrainShuffleBatch"
+    #)
 
-    #TestingData
-    testA_batch,testP_batch = shuffle_batch(
-    [audio[0],params[0]],
-    batch_size=batchSize,
-    capacity = capacity,
-    min_after_dequeue = min_dequeue,
-    num_threads=num_enqueue_threads,
-    seed=None,
-    enqueue_many=False,
-    shapes=None,
-    allow_smaller_final_batch=True,
-    shared_name=None,
-    name="TestShuffleBatch"
-    )
+    ##TestingData
+    #testA_batch,testP_batch = tf.train.shuffle_batch(
+    #[audio[1],params[1]],
+    #batch_size=batchSize,
+    #capacity = capacity,
+    #min_after_dequeue = min_dequeue,
+    #num_threads=num_enqueue_threads,
+    #seed=None,
+    #enqueue_many=False,
+    #shapes=None,
+    #allow_smaller_final_batch=False,
+    #shared_name=None,
+    #name="TestShuffleBatch"
+    #)
 
-
+    #The above shuffles dont work unless we have a defined batch size  on the return values. 
 
     #SequenceBatch
+    #sequences = {"audio":trainA_batch , "testAudio": testA_batch}
+    #context = {"params":trainP_batch , "testParams":testP_batch}
 
-    sequences = {"audio":trainA_batch , "testAudio": testA_batch}
-    context = {"params":trainP_batch , "testParams":testP_batch}
+    sequences = {"audio":audio[0] , "testAudio": audio[1]}
+    context = {"params":params[0] , "testParams":params[1]}
+    initial_states = initState
+    capacity -= min_dequeue
 
-    stateful_reader = tf.SequenceQueueingStateSaver(
-    batch_size, 
-    num_unroll,
-    length=length, 
+    stateful_reader = tf.contrib.training.SequenceQueueingStateSaver(
+    batchSize, 
+    num_unroll=unroll,
+    input_length = tf.size(params,name = "ParamsSize_createBatch"), 
     input_key=key,
     input_sequences=sequences,
     input_context=context, 
     initial_states=initial_states,
-    capacity=batch_size*100)
+    )
+    batch = stateful_reader.next_batch
 
-    initial_states = initState
-    capacity = batchSize * num_enqueue_threads * 1 #TODO: Evaluate this and decide if its appropriate, IT APPEARS THIS WILL decide how many epochs we do as num_threads * 30
+    queue_runner = tf.train.QueueRunner(stateful_reader, [stateful_reader.prefetch_op] * num_enqueue_threads)
+    tf.train.add_queue_runner(queue_runner)
 
-    batch = tf.contrib.training.batch_sequences_with_states(
-        input_key=key,
-        input_sequences=sequence,
-        input_context=context,
-        initial_states=initial_states,
-        num_unroll=unroll,
-        batch_size=batchSize,
-        num_threads=num_enqueue_threads,
-        input_length = tf.size(params,name = "ParamsSize_createBatch"),#is this correct for input_length? I think it needs to be sequence length instead
-        capacity=capacity
-        )
+    
+    #This is what we first tried making for batching, but resulted in the correct sequence splitting behaviour besides the fact it would
+    #not refill after it went through its capacity of elements
+    #batch = tf.contrib.training.batch_sequences_with_states(
+    #    input_key=key,
+    #    input_sequences=sequences,
+    #    input_context=context,
+    #    initial_states=initial_states,
+    #    num_unroll=unroll,
+    #    batch_size=batchSize,
+    #    num_threads=num_enqueue_threads,
+    #    input_length = tf.size(params,name = "ParamsSize_createBatch"),#is this correct for input_length? I think it needs to be sequence length instead
+    #    capacity=capacity
+    #    )
+
     print("Completed Creating Batch")
     return batch
 
@@ -532,6 +541,7 @@ with tf.Session() as sess:
             sessList = [cost,testSumry]
             feed = {outActual:yTest,outputHolder: yTest, inputHolder:inpHldr}
             Cst,sumry = sess.run(sessList,feed_dict = feed)
+            print("current Testing cost: " + str(Cst))
 
           #  ##saver.save(sess,'.\TensorBoard\checkpoints',global_step= i)
             writer.add_summary(sumry,i)
