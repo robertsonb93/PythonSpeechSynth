@@ -11,7 +11,7 @@ ref = ctypes.byref
 c_char = ctypes.c_char
 c_charp = ctypes.c_char_p
 
-MyDllObject = ctypes.cdll.LoadLibrary("../../VocalTractLabApi64")
+MyDllObject = ctypes.cdll.LoadLibrary("../VocalTractLabApi64")
 Initialize = MyDllObject.vtlInitialize 
 Close = MyDllObject.vtlClose
 GetVersion = MyDllObject.vtlGetVersion

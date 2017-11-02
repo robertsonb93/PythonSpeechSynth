@@ -43,47 +43,11 @@ def createBatch(batchSize,key,params,audio,initState,unroll,num_enqueue_threads 
 
     min_dequeue = 1000
     capacity = min_dequeue + (batchSize * num_enqueue_threads * 1)
-    
-    ##TrainingData
-    #trainA_batch,trainP_batch = tf.train.shuffle_batch(
-    #[audio[0],params[0]],
-    #batch_size=batchSize,
-    #capacity = capacity,
-    #min_after_dequeue = min_dequeue,
-    #num_threads=num_enqueue_threads,
-    #seed=None,
-    #enqueue_many=False,
-    #shapes=None,
-    #allow_smaller_final_batch=False,
-    #shared_name=None,
-    #name="TrainShuffleBatch"
-    #)
-
-    ##TestingData
-    #testA_batch,testP_batch = tf.train.shuffle_batch(
-    #[audio[1],params[1]],
-    #batch_size=batchSize,
-    #capacity = capacity,
-    #min_after_dequeue = min_dequeue,
-    #num_threads=num_enqueue_threads,
-    #seed=None,
-    #enqueue_many=False,
-    #shapes=None,
-    #allow_smaller_final_batch=False,
-    #shared_name=None,
-    #name="TestShuffleBatch"
-    #)
-
-    #The above shuffles dont work unless we have a defined batch size  on the return values. 
-
-    #SequenceBatch
-    #sequences = {"audio":trainA_batch , "testAudio": testA_batch}
-    #context = {"params":trainP_batch , "testParams":testP_batch}
+   
 
     sequences = {"audio":audio[0] , "testAudio": audio[1]}
     context = {"params":params[0] , "testParams":params[1]}
     initial_states = initState
-    capacity -= min_dequeue
 
     stateful_reader = tf.contrib.training.SequenceQueueingStateSaver(
     batchSize, 
@@ -95,27 +59,10 @@ def createBatch(batchSize,key,params,audio,initState,unroll,num_enqueue_threads 
     initial_states=initial_states,
     )
     batch = stateful_reader.next_batch
-
-    queue_runner = tf.train.QueueRunner(stateful_reader, [stateful_reader.prefetch_op] * num_enqueue_threads)
-    tf.train.add_queue_runner(queue_runner)
-
     
-    #This is what we first tried making for batching, but resulted in the correct sequence splitting behaviour besides the fact it would
-    #not refill after it went through its capacity of elements
-    #batch = tf.contrib.training.batch_sequences_with_states(
-    #    input_key=key,
-    #    input_sequences=sequences,
-    #    input_context=context,
-    #    initial_states=initial_states,
-    #    num_unroll=unroll,
-    #    batch_size=batchSize,
-    #    num_threads=num_enqueue_threads,
-    #    input_length = tf.size(params,name = "ParamsSize_createBatch"),#is this correct for input_length? I think it needs to be sequence length instead
-    #    capacity=capacity
-    #    )
-
+    
     print("Completed Creating Batch")
-    return batch
+    return batch,stateful_reader
 
 #Will format the the input and output appropriately, and also produce the needed sequenceLengths for already padded audio data
 def seqLen_input_output(paramBatch,audioBatch,unroll,maxBatchSz,srate,outSize):
@@ -379,7 +326,7 @@ trainFiles = list()
 buildFiles =list()
 postfix = ".csv"
 prefix = "Train"
-for i in range(392,400):
+for i in range(322,400):
     buildFiles.append( (prefix + str(i) + postfix))
 genData = False # <----------Generate new training data
 if genData:
@@ -426,7 +373,7 @@ with tf.Session() as sess:
 
     #Use this to dtermine how wide and how many layers our RNN should be
     cellDepth = 1
-    cellWidth = 147*2
+    cellWidth = 2
     cell,initState = GenRNNCells(maxBatchSz,cellWidth,cellDepth) #cell will goto the rnn, initState will goto createBatch
 
     miniSequenceSize = 150
@@ -441,7 +388,7 @@ with tf.Session() as sess:
     audio.append(a)
     key += key2
     #Create a state saving batch from our input & output we read from files
-    batch = createBatch(maxBatchSz,key,params,audio,initState,miniSequenceSize,10)
+    batch,SQSS = createBatch(maxBatchSz,key,params,audio,initState,miniSequenceSize,3)
 
     #Lets feed these with the batch.context, and batch.sequence
     inputHolder = tf.placeholder(tf.float32,shape = [None,miniSequenceSize],name = "inputPlaceHolder")
@@ -455,9 +402,9 @@ with tf.Session() as sess:
 
     #create Weights
 
-    networkDepth = 20
+    networkDepth = 5
     print("Creating Weights")
-    h_size = 147*2
+    h_size = cellWidth
     W = list()
     W.append(weight_variable((cellWidth,h_size)))  
     for s in range(networkDepth):
@@ -505,16 +452,20 @@ with tf.Session() as sess:
     print("Completed Summaries")
 
     coord = tf.train.Coordinator()
-    threads = tf.train.start_queue_runners(coord=coord)
+    queue_runner = tf.train.QueueRunner(SQSS, [SQSS.prefetch_op] * 3)
+    tf.train.add_queue_runner(queue_runner)
+    tf.train.start_queue_runners()
+    threads = tf.train.start_queue_runners(coord=coord)     
     sess.run(tf.local_variables_initializer())#TODO: do we need both of these intializations?
-    init = tf.global_variables_initializer()
-    sess.run(init)   
+    sess.run(tf.global_variables_initializer())
     print("Session Init complete")
 
     for i in range(epochs):
         print(i," of ",epochs)       
 
-        if (i%testFreq):       
+        if(not(i%maxBatchSz)):
+            batch = SQSS.next_batch # we want a new batch on the batchSz iteration
+        if (i%testFreq or i == 0):       
             
             y,inpHldr = sess.run([batch.context["params"],batch.sequences["audio"]])
             normalizeOut(y,maxBatchSz,tubecount,vtcount,glotcount)
